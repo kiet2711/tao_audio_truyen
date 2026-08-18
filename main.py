@@ -1,14 +1,17 @@
 import os
+import re
 import json
 import base64
 import logging
+import threading
+import concurrent.futures
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import requests
 from fastapi import FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,8 +23,8 @@ logger = logging.getLogger("capcut-tts-web")
 
 app = FastAPI(
     title="CapCut Text-to-Speech Web API",
-    description="Web service and API for CapCut Text-to-Speech (TTS)",
-    version="1.0.0",
+    description="Web service and API for CapCut Text-to-Speech (TTS) with multi-threading and smart text chunking",
+    version="1.1.0",
 )
 
 # Enable CORS for web clients
@@ -38,15 +41,18 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 VOICE_JSON_PATH = BASE_DIR / "Voice.json"
 
-# Initialize single client instance
+# Shared client instance & lock for device operations
 client = CapCutClient()
+device_lock = threading.Lock()
 
 
 class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Nội dung văn bản cần chuyển thành giọng nói")
-    voice: Optional[str] = Field("BV074_streaming", description="Mã voice_type (ví dụ: BV074_streaming, BV421_vivn_streaming)")
-    resource_id: Optional[str] = Field(None, description="Resource ID của voice (nếu có)")
+    voice: Optional[str] = Field("BV074_streaming", description="Mã voice_type")
+    resource_id: Optional[str] = Field(None, description="Resource ID của voice")
     rate: Optional[float] = Field(1.0, ge=0.5, le=2.0, description="Tốc độ giọng đọc (0.5 đến 2.0)")
+    threads: Optional[int] = Field(10, ge=1, le=50, description="Số luồng xử lý đa luồng đồng thời")
+    auto_split: Optional[bool] = Field(True, description="Tự động tách văn bản dài thành các đoạn nhỏ và ghép lại")
 
 
 class ResetDeviceResponse(BaseModel):
@@ -55,8 +61,82 @@ class ResetDeviceResponse(BaseModel):
     message: str
 
 
+def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
+    """
+    Tách văn bản dài thành các đoạn nhỏ vừa vặn với giới hạn API CapCut,
+    bảo toàn câu văn và ngắt nghỉ tự nhiên theo dấu chấm, chấm phẩy, xuống dòng.
+    """
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+
+    # Tách theo dòng trước
+    paragraphs = [p.strip() for p in cleaned.split("\n") if p.strip()]
+    chunks: List[str] = []
+
+    for para in paragraphs:
+        if len(para) <= max_chars:
+            chunks.append(para)
+            continue
+
+        # Tách theo dấu câu . ! ? … ;
+        sentences = re.split(r'(?<=[.!?…;])\s+', para)
+        current = ""
+
+        for s in sentences:
+            s = s.strip()
+            if not s:
+                continue
+
+            if len(current) + len(s) + 1 <= max_chars:
+                current = (current + " " + s).strip() if current else s
+            else:
+                if current:
+                    chunks.append(current)
+                    current = ""
+
+                # Nếu bản thân 1 câu vẫn dài hơn max_chars, tách theo dấu phẩy hoặc từ ngữ
+                if len(s) > max_chars:
+                    comma_parts = re.split(r'(?<=[,:\-])\s+', s)
+                    sub_curr = ""
+                    for cp in comma_parts:
+                        cp = cp.strip()
+                        if not cp:
+                            continue
+                        if len(sub_curr) + len(cp) + 1 <= max_chars:
+                            sub_curr = (sub_curr + " " + cp).strip() if sub_curr else cp
+                        else:
+                            if sub_curr:
+                                chunks.append(sub_curr)
+                                sub_curr = ""
+                            # Trường hợp từ đơn lẻ quá dài
+                            if len(cp) > max_chars:
+                                words = cp.split()
+                                w_curr = ""
+                                for w in words:
+                                    if len(w_curr) + len(w) + 1 <= max_chars:
+                                        w_curr = (w_curr + " " + w).strip() if w_curr else w
+                                    else:
+                                        if w_curr:
+                                            chunks.append(w_curr)
+                                        w_curr = w
+                                if w_curr:
+                                    chunks.append(w_curr)
+                            else:
+                                sub_curr = cp
+                    if sub_curr:
+                        chunks.append(sub_curr)
+                else:
+                    current = s
+
+        if current:
+            chunks.append(current)
+
+    return [c for c in chunks if c.strip()]
+
+
 def extract_audio_bytes(api_result: Dict[str, Any]) -> bytes:
-    """Extracts raw MP3 audio bytes from CapCut task result."""
+    """Trích xuất dữ liệu âm thanh MP3 từ phản hồi CapCut task."""
     tasks = (api_result.get("data") or {}).get("tasks") or []
     if not tasks:
         raise CapCutError("Không tìm thấy dữ liệu task từ phản hồi CapCut API.")
@@ -82,15 +162,55 @@ def extract_audio_bytes(api_result: Dict[str, Any]) -> bytes:
             audio_base64 = task_data["audio"]
 
     if video_url:
-        logger.info(f"Downloading audio from speech URL: {video_url}")
         resp = requests.get(video_url, timeout=60)
         resp.raise_for_status()
         return resp.content
     elif audio_base64:
-        logger.info("Decoding audio from base64 payload")
         return base64.b64decode(audio_base64)
     else:
         raise CapCutError("Không tìm thấy URL hoặc dữ liệu âm thanh trong phản hồi.")
+
+
+def process_single_chunk(
+    chunk_index: int,
+    chunk_text: str,
+    voice_type: str,
+    resource_id: Optional[str],
+    rate_str: str,
+) -> Tuple[int, bytes]:
+    """
+    Xử lý tạo TTS cho một đoạn văn bản với cơ chế tự động thử lại (retry)
+    và đổi Device ID an toàn khi bị giới hạn.
+    """
+    local_client = CapCutClient(device=client.device)
+    max_attempts = 4
+
+    for attempt in range(max_attempts):
+        try:
+            result = local_client.generate_speech(
+                texts=chunk_text,
+                voice=voice_type,
+                resource_id=resource_id,
+                rate=rate_str,
+                wait=True,
+                timeout=45.0,
+            )
+            audio_bytes = extract_audio_bytes(result)
+            return chunk_index, audio_bytes
+        except Exception as exc:
+            if attempt == max_attempts - 1:
+                logger.error(f"Chunk #{chunk_index + 1} failed after {max_attempts} attempts: {exc}")
+                raise exc
+
+            # Randomize device ID on failure & wait backoff
+            logger.warning(f"Chunk #{chunk_index + 1} retry {attempt + 1}/{max_attempts} due to: {exc}")
+            with device_lock:
+                client.device.randomize()
+                local_client.device = client.device
+            import time
+            time.sleep(1.0 * (attempt + 1))
+
+    raise CapCutError(f"Không thể tạo âm thanh cho đoạn #{chunk_index + 1}")
 
 
 @app.get("/health")
@@ -112,8 +232,9 @@ def get_device_info():
 @app.post("/api/reset-device", response_model=ResetDeviceResponse)
 def reset_device():
     """Randomize the device ID to bypass rate-limits or bans."""
-    client.device.randomize()
-    new_id = client.device.device_id
+    with device_lock:
+        client.device.randomize()
+        new_id = client.device.device_id
     logger.info(f"Device ID rotated to: {new_id}")
     return ResetDeviceResponse(
         status="success",
@@ -130,8 +251,6 @@ def get_voices(
     """Retrieve list of available voices from Voice.json catalog."""
     try:
         voices = client.list_voices(catalog_path=VOICE_JSON_PATH)
-        
-        # Collect all unique languages
         languages = sorted(list({v.lang for v in voices if v.lang}))
 
         results = []
@@ -163,38 +282,88 @@ def get_voices(
 @app.post("/api/tts")
 def generate_tts(req: TTSRequest):
     """
-    Generate speech from input text and return MP3 audio stream directly.
+    Chuyển văn bản thành giọng nói (TTS):
+    - Tự động tách đoạn văn dài thành các phần nhỏ (Smart Chunking).
+    - Xử lý đa luồng (Multi-threading) song song tăng tốc tối đa.
+    - Tự động ghép nối các phần âm thanh thành một file MP3 hoàn chỉnh.
     """
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
     rate_str = f"{req.rate:.1f}" if req.rate else "1.0"
-    logger.info(f"Generating TTS | Voice: {req.voice} | Rate: {rate_str} | Text length: {len(text)}")
+    num_threads = min(max(req.threads or 10, 1), 50)
+
+    # 1. Tách văn bản thành các đoạn nhỏ nếu bật auto_split hoặc văn bản dài
+    if req.auto_split and (len(text) > 200 or "\n" in text):
+        chunks = split_text_into_chunks(text, max_chars=250)
+    else:
+        chunks = [text]
+
+    total_chunks = len(chunks)
+    logger.info(
+        f"Processing TTS | Voice: {req.voice} | Rate: {rate_str} | "
+        f"Total chars: {len(text)} | Chunks: {total_chunks} | Threads: {num_threads}"
+    )
+
+    if total_chunks == 0:
+        raise HTTPException(status_code=400, detail="Không có nội dung hợp lệ để xử lý.")
 
     try:
-        result = client.generate_speech(
-            texts=text,
-            voice=req.voice,
-            resource_id=req.resource_id,
-            rate=rate_str,
-            wait=True,
-            timeout=60.0,
-        )
-        audio_bytes = extract_audio_bytes(result)
+        # Nếu chỉ có 1 đoạn duy nhất -> xử lý trực tiếp
+        if total_chunks == 1:
+            _, audio_bytes = process_single_chunk(0, chunks[0], req.voice, req.resource_id, rate_str)
+            return Response(
+                content=audio_bytes,
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": 'inline; filename="speech.mp3"',
+                    "Content-Type": "audio/mpeg",
+                    "X-Total-Chunks": "1",
+                },
+            )
+
+        # Xử lý đa luồng cho nhiều đoạn (Multi-threading)
+        workers = min(num_threads, total_chunks)
+        results: Dict[int, bytes] = {}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {
+                executor.submit(
+                    process_single_chunk,
+                    idx,
+                    chunk,
+                    req.voice,
+                    req.resource_id,
+                    rate_str,
+                ): idx
+                for idx, chunk in enumerate(chunks)
+            }
+
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx, audio_data = future.result()
+                results[idx] = audio_data
+
+        # Ghép nối các đoạn audio theo đúng thứ tự ban đầu
+        ordered_audio_parts = [results[i] for i in range(total_chunks)]
+        merged_audio = b"".join(ordered_audio_parts)
+
+        logger.info(f"Successfully generated & merged {total_chunks} chunks ({len(merged_audio)} bytes)")
+
         return Response(
-            content=audio_bytes,
+            content=merged_audio,
             media_type="audio/mpeg",
             headers={
                 "Content-Disposition": 'inline; filename="speech.mp3"',
                 "Content-Type": "audio/mpeg",
-                "Cache-Control": "no-cache",
+                "X-Total-Chunks": str(total_chunks),
             },
         )
+
     except CapCutTaskError as e:
         logger.error(f"CapCut Task Error: {e}")
-        # Try auto-rotating device ID if task fails
-        client.device.randomize()
+        with device_lock:
+            client.device.randomize()
         raise HTTPException(
             status_code=502,
             detail=f"Lỗi từ CapCut API (đã tự động đổi Device ID): {str(e)}",
@@ -223,6 +392,5 @@ def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    # Render provides PORT environment variable
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

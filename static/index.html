@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CapCut Text to Speech - Chuyển văn bản thành giọng nói</title>
-    <meta name="description" content="Công cụ chuyển đổi văn bản thành giọng nói chuẩn CapCut trực tuyến với đầy đủ giọng đọc tự nhiên, chất lượng cao.">
+    <meta name="description" content="Công cụ chuyển đổi văn bản thành giọng nói chuẩn CapCut trực tuyến với đầy đủ giọng đọc tự nhiên, hỗ trợ văn bản dài và đa luồng siêu tốc.">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +30,7 @@
                 </div>
                 <div class="brand-info">
                     <h1>CapCut TTS Studio</h1>
-                    <p class="brand-sub">Chuyển đổi văn bản sang giọng đọc tự nhiên & chân thực</p>
+                    <p class="brand-sub">Chuyển văn bản thành giọng đọc tự nhiên &bull; Hỗ trợ văn bản dài đa luồng</p>
                 </div>
             </div>
 
@@ -56,7 +56,7 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fa-solid fa-microphone-lines"></i>
-                            <h2>Cấu hình giọng đọc</h2>
+                            <h2>Cấu hình giọng đọc & Tốc độ</h2>
                         </div>
                         <span class="voice-count-badge" id="voiceCountBadge">Đang tải giọng...</span>
                     </div>
@@ -113,6 +113,36 @@
                                 <button class="btn-preset" data-rate="1.5">1.5x (Rất nhanh)</button>
                             </div>
                         </div>
+
+                        <!-- Multi-threading & Smart Chunking Settings -->
+                        <div class="form-group advanced-tool-group">
+                            <div class="threads-header">
+                                <div class="threads-label-box">
+                                    <label class="input-label" for="threadsSlider">
+                                        <i class="fa-solid fa-bolt"></i> Số luồng chạy (Đa luồng):
+                                    </label>
+                                    <span class="threads-desc">Xử lý song song nhiều đoạn cùng lúc</span>
+                                </div>
+                                <span class="rate-value threads-value" id="threadsValueDisplay">10 Luồng</span>
+                            </div>
+                            <div class="slider-wrapper">
+                                <input type="range" id="threadsSlider" min="1" max="50" step="1" value="10" class="custom-range">
+                                <div class="rate-ticks">
+                                    <span>1 (Đơn luồng)</span>
+                                    <span>10 (Nhanh)</span>
+                                    <span>25 (Rất nhanh)</span>
+                                    <span>50 (Tối đa)</span>
+                                </div>
+                            </div>
+
+                            <div class="toggle-option-row">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="chkAutoSplit" checked>
+                                    <span class="checkmark"></span>
+                                    <span class="checkbox-label">Tự động tách văn bản dài thành các đoạn nhỏ & ghép MP3</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -124,8 +154,11 @@
                             <h2>Văn bản cần đọc</h2>
                         </div>
                         <div class="text-actions">
-                            <button class="btn-text-action" id="btnSampleText" title="Điền văn bản mẫu">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Mẫu
+                            <button class="btn-text-action" id="btnSampleLongText" title="Điền truyện/văn bản dài mẫu">
+                                <i class="fa-solid fa-book-open"></i> Mẫu dài
+                            </button>
+                            <button class="btn-text-action" id="btnSampleText" title="Điền văn bản mẫu ngắn">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Mẫu ngắn
                             </button>
                             <button class="btn-text-action" id="btnClearText" title="Xóa nội dung">
                                 <i class="fa-solid fa-trash-can"></i> Xóa
@@ -135,7 +168,7 @@
 
                     <div class="card-body">
                         <div class="textarea-container">
-                            <textarea id="textInput" rows="6" placeholder="Nhập hoặc dán nội dung văn bản bạn muốn chuyển thành giọng nói vào đây..."></textarea>
+                            <textarea id="textInput" rows="7" placeholder="Nhập hoặc dán nội dung văn bản bạn muốn đọc vào đây... (Không giới hạn độ dài, hệ thống sẽ tự động tách câu và chạy đa luồng siêu tốc)"></textarea>
                         </div>
 
                         <div class="text-stats">
@@ -146,6 +179,10 @@
                             <div class="stat-item">
                                 <span class="stat-label">Số từ:</span>
                                 <span class="stat-value" id="wordCount">0</span>
+                            </div>
+                            <div class="stat-item" id="chunkEstimateWrapper">
+                                <span class="stat-label">Số đoạn:</span>
+                                <span class="stat-value chunk-badge" id="chunkEstimate">1 đoạn</span>
                             </div>
                         </div>
 
@@ -246,7 +283,7 @@
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>CapCut Text-to-Speech Web App &bull; Sẵn sàng deploy Render.com</p>
+            <p>CapCut Text-to-Speech Web App &bull; Hỗ trợ văn bản dài & Xử lý đa luồng &bull; Sẵn sàng deploy Render.com</p>
         </footer>
     </div>
 

@@ -1,15 +1,17 @@
 # CapCut Text-to-Speech (TTS) Web Studio
 
-Ứng dụng Web chuyển đổi văn bản thành giọng nói (Text-to-Speech) chuẩn CapCut tự nhiên, sẵn sàng triển khai miễn phí lên nền tảng **Render.com**.
+Ứng dụng Web chuyển đổi văn bản thành giọng nói (Text-to-Speech) chuẩn CapCut tự nhiên, hỗ trợ văn bản dài, tự động tách đoạn thông minh & xử lý đa luồng siêu tốc, sẵn sàng triển khai miễn phí lên nền tảng **Render.com**.
 
 ---
 
 ## 🌟 Tính Năng Nổi Bật
+- **Xử lý Văn bản dài không giới hạn**: Tự động nhận diện và phân tách các câu văn, đoạn truyện dài thành các phần nhỏ thông minh theo dấu ngắt câu (`.`, `!`, `?`, `\n`) mà không bị lỗi giới hạn ký tự của CapCut.
+- **Đa luồng Siêu Tốc (Multi-threading)**: Cho phép tùy chỉnh từ **1 đến 50 luồng** (`ThreadPoolExecutor`), gửi và xử lý song song các đoạn văn cùng lúc, tự động ghép lại thành **1 file MP3 duy nhất hoàn chỉnh**.
 - **Giao diện Web UI cao cấp**: Thiết kế Dark Mode hiện đại, hiệu ứng sóng âm sống động, tương thích hoàn hảo trên cả Máy tính & Điện thoại.
 - **Thư viện Giọng đọc phong phú**: Hỗ trợ đầy đủ các giọng đọc tiếng Việt (Nhỏ Ngọt Ngào, Cô Gái Hoạt Ngôn, Giọng Bé...) cùng các ngôn ngữ phổ biến (Anh, Trung, Nhật...).
 - **Tùy chỉnh Tốc độ (Speed Rate)**: Thanh trượt từ `0.5x` đến `2.0x` cùng các nút chọn nhanh tiện lợi.
 - **Trình phát Audio tích hợp**: Nghe trực tiếp ngay trên trình duyệt và tải file MP3 chất lượng cao với 1 click.
-- **Cơ chế Gỡ Ban / Đổi Device ID**: Tự động hoặc thủ công đổi Device ID để tránh bị rate-limit hoặc chặn API.
+- **Cơ chế Gỡ Ban / Đổi Device ID**: Tự động hoặc thủ công đổi Device ID với thread-safety để tránh bị rate-limit hoặc chặn API.
 - **Lưu lịch sử tác vụ**: Lưu danh sách các câu đã tạo trong phiên làm việc để nghe lại hoặc tái sử dụng nội dung.
 
 ---
@@ -39,7 +41,7 @@
    - **Name**: `capcut-tts-web` (hoặc tên tùy thích)
    - **Language / Runtime**: `Python 3`
    - **Branch**: `main`
-   - **Region**: `Singapore` hoặc `Frankfurt` (khuyên chọn Singapore hoặc Oregon cho tốc độ tốt)
+   - **Region**: `Singapore` hoặc `Oregon`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - **Instance Type**: `Free` (0$/tháng)
@@ -85,33 +87,3 @@ Nếu muốn chạy thử trên máy tính của bạn trước khi đưa lên m
    http://127.0.0.1:8000
    ```
    Tài liệu Swagger API tự động tại: `http://127.0.0.1:8000/docs`
-
----
-
-## 📁 Cấu Trúc Mã Nguồn
-
-```
-capcut_tts_web/
-├── capcut_tts_api/           # Core SDK xử lý mã hóa chữ ký và gọi API CapCut
-├── Voice.json                # Danh sách đầy đủ toàn bộ giọng đọc CapCut
-├── main.py                   # Server FastAPI xử lý API TTS và phục vụ giao diện
-├── requirements.txt          # Thư viện Python phụ thuộc
-├── render.yaml               # Cấu hình tự động triển khai Render Blueprint
-├── Dockerfile                # Cấu hình Docker container
-├── .gitignore                # Bỏ qua file rác và bộ nhớ đệm
-├── README.md                 # Hướng dẫn sử dụng & triển khai
-└── static/                   # Giao diện người dùng (Frontend)
-    ├── index.html            # Cấu trúc trang web
-    ├── style.css             # Giao diện Dark Theme hiện đại
-    └── app.js                # Logic phát âm thanh, bộ lọc giọng, lưu lịch sử
-```
-
----
-
-## ❓ Câu Hỏi Thường Gặp & Khắc Phục Lỗi (Troubleshooting)
-
-**1. Render báo service bị sleep (ngủ đông) sau một thời gian không dùng?**
-> Gói Free của Render sẽ tạm dừng sau 15 phút không có lượt truy cập để tiết kiệm tài nguyên. Khi có người truy cập lại, web sẽ mất khoảng 30-50 giây để khởi động lại. Nếu muốn ứng dụng chạy 24/7 không bao giờ sleep, bạn có thể dùng dịch vụ ping miễn phí như [UptimeRobot](https://uptimerobot.com) để ping endpoint `https://<ten-app>.onrender.com/health` mỗi 10 phút.
-
-**2. Gặp lỗi "CapCut Task Error" hoặc tạo giọng bị chậm?**
-> Bấm nút **Đổi ID (Gỡ Ban)** ở góc phải màn hình Web để tạo một Device ID hoàn toàn mới và tiếp tục sử dụng.

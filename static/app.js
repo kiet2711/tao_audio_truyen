@@ -1,5 +1,6 @@
 /**
  * CapCut TTS Studio Web Frontend Logic
+ * Hỗ trợ tạo TTS văn bản dài, tách đoạn thông minh và xử lý đa luồng
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,10 +17,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const rateValueDisplay = document.getElementById('rateValueDisplay');
     const ratePresets = document.querySelectorAll('.btn-preset');
     
+    const threadsSlider = document.getElementById('threadsSlider');
+    const threadsValueDisplay = document.getElementById('threadsValueDisplay');
+    const chkAutoSplit = document.getElementById('chkAutoSplit');
+
     const textInput = document.getElementById('textInput');
     const charCount = document.getElementById('charCount');
     const wordCount = document.getElementById('wordCount');
+    const chunkEstimate = document.getElementById('chunkEstimate');
     const btnSampleText = document.getElementById('btnSampleText');
+    const btnSampleLongText = document.getElementById('btnSampleLongText');
     const btnClearText = document.getElementById('btnClearText');
     const btnGenerate = document.getElementById('btnGenerate');
     
@@ -46,11 +53,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const STORAGE_KEY = 'capcut_tts_web_history';
 
     // --- Sample Texts ---
-    const sampleTexts = [
+    const sampleShortTexts = [
         "Xin chào các bạn! Đây là giọng đọc nhân tạo từ CapCut cực kỳ tự nhiên và sống động.",
         "Chào mừng bạn đến với CapCut Text-to-Speech Web Studio. Chúc bạn có những trải nghiệm tuyệt vời!",
         "Hôm nay trời thật đẹp, hãy cùng lắng nghe đoạn audio mẫu được tạo ra bằng công nghệ AI giọng nói nhé."
     ];
+
+    const sampleLongStory = 
+`Ngày xửa ngày xưa, ở một ngôi làng nhỏ ven rừng, có một người thợ mộc già nổi tiếng với đôi bàn tay khéo léo. Ông không chỉ làm ra những chiếc bàn, chiếc ghế bền đẹp, mà còn thổi hồn vào từng khúc gỗ vô tri.
+
+Một buổi sáng mùa xuân, khi những tia nắng đầu tiên xuyên qua kẽ lá, một cậu bé nghèo tìm đến xưởng của ông. Cậu bé muốn nhờ ông làm một món quà đặc biệt dành tặng người mẹ đang ốm nặng.
+
+Người thợ mộc già mỉm cười hiền từ và gật đầu đồng ý. Ông đã dành trọn ba ngày ba đêm để tạc nên một bông hoa bằng gỗ bách hương thơm ngát. Khi người mẹ nhận được món quà, nụ cười hạnh phúc đã rạng rỡ trên khuôn mặt bà, xua tan đi mọi mệt mỏi bệnh tật.
+
+Câu chuyện về lòng hiếu thảo của cậu bé và tấm lòng nhân ái của người thợ mộc từ đó được lưu truyền mãi trong dân gian như một bài học ấm áp về tình người.`;
 
     // --- Utility: Toast Notification ---
     function showToast(message, type = 'info') {
@@ -73,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateX(100%)';
             setTimeout(() => toast.remove(), 300);
-        }, 4000);
+        }, 4500);
     }
 
     // --- Format Time Helper ---
@@ -137,13 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchTerm = (voiceSearchInput.value || '').toLowerCase().trim();
         
         let filtered = allVoices.filter(v => {
-            // Language filter
             if (currentLangFilter !== 'all') {
                 const matchLang = (v.lang && v.lang.toLowerCase() === currentLangFilter.toLowerCase()) ||
                                   (v.lan && v.lan.toLowerCase() === currentLangFilter.toLowerCase());
                 if (!matchLang) return false;
             }
-            // Search filter
             if (searchTerm) {
                 const matchSearch = v.display_name.toLowerCase().includes(searchTerm) ||
                                     v.voice_type.toLowerCase().includes(searchTerm);
@@ -167,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
             opt.dataset.lang = v.lang || '';
             opt.textContent = `${v.display_name} (${v.voice_type})`;
             
-            // Prefer Sweet Girl / Default Vietnamese voice as default selection
             if (currentLangFilter === 'vi-VN' && (v.voice_type === 'BV421_vivn_streaming' || v.voice_type === 'BV074_streaming')) {
                 opt.selected = true;
             } else if (index === 0 && !voiceSelect.value) {
@@ -219,20 +232,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Text Input Events ---
+    // --- Threads Slider Event ---
+    threadsSlider.addEventListener('input', (e) => {
+        threadsValueDisplay.textContent = `${e.target.value} Luồng`;
+    });
+
+    // --- Text Input & Stats Events ---
+    function estimateChunks(text) {
+        if (!text.trim()) return 0;
+        if (!chkAutoSplit.checked || (text.length <= 200 && !text.includes('\n'))) return 1;
+        // Approximate ~200 chars per chunk
+        const count = Math.max(1, Math.ceil(text.length / 200));
+        return count;
+    }
+
     function updateTextStats() {
         const text = textInput.value;
         charCount.textContent = text.length;
         const words = text.trim() ? text.trim().split(/\s+/).length : 0;
         wordCount.textContent = words;
+        
+        const estChunks = estimateChunks(text);
+        chunkEstimate.textContent = `${estChunks} đoạn (${threadsSlider.value} luồng)`;
     }
 
     textInput.addEventListener('input', updateTextStats);
+    chkAutoSplit.addEventListener('change', updateTextStats);
+    threadsSlider.addEventListener('change', updateTextStats);
 
     btnSampleText.addEventListener('click', () => {
-        const randomSample = sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
+        const randomSample = sampleShortTexts[Math.floor(Math.random() * sampleShortTexts.length)];
         textInput.value = randomSample;
         updateTextStats();
+    });
+
+    btnSampleLongText.addEventListener('click', () => {
+        textInput.value = sampleLongStory;
+        updateTextStats();
+        showToast('Đã nạp văn bản dài mẫu (sẽ tự động tách đoạn & xử lý đa luồng)!', 'info');
     });
 
     btnClearText.addEventListener('click', () => {
@@ -240,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTextStats();
     });
 
-    // Set default initial text
+    // Set initial text
     textInput.value = "Xin chào! Bạn có thể nhập nội dung văn bản vào đây để tôi đọc cho bạn nghe nhé.";
     updateTextStats();
 
@@ -262,12 +299,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const voiceType = selectedOption.value;
         const resourceId = selectedOption.dataset.resourceId || null;
         const rate = parseFloat(rateSlider.value) || 1.0;
+        const threads = parseInt(threadsSlider.value, 10) || 10;
+        const autoSplit = chkAutoSplit.checked;
         const voiceName = selectedOption.textContent;
+
+        const estChunks = estimateChunks(text);
 
         // UI Loading state
         btnGenerate.disabled = true;
-        btnGenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Đang tạo âm thanh...</span>';
-        playerStatus.textContent = 'Đang xử lý...';
+        btnGenerate.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Đang xử lý đa luồng (${threads} luồng)...</span>`;
+        playerStatus.textContent = `Đang tạo ${estChunks} đoạn...`;
         playerStatus.classList.remove('active');
 
         try {
@@ -278,7 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     text: text,
                     voice: voiceType,
                     resource_id: resourceId,
-                    rate: rate
+                    rate: rate,
+                    threads: threads,
+                    auto_split: autoSplit
                 })
             });
 
@@ -287,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errData.detail || `Lỗi máy chủ (${response.status})`);
             }
 
+            const totalChunks = response.headers.get('X-Total-Chunks') || '1';
             const audioBlob = await response.blob();
             
             // Clean up previous blob URL
@@ -299,8 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update Player UI
             currentPlayingVoice.textContent = voiceName;
-            currentPlayingPreview.textContent = text;
-            playerStatus.textContent = 'Sẵn sàng phát';
+            currentPlayingPreview.textContent = `Đã ghép hoàn tất ${totalChunks} đoạn văn bản (${text.length} ký tự)`;
+            playerStatus.textContent = `Hoàn tất (${totalChunks} đoạn)`;
             playerStatus.classList.add('active');
             
             btnPlayPause.disabled = false;
@@ -309,9 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnDownload.style.display = 'inline-flex';
 
             // Auto play
-            audioElement.play().catch(() => {
-                // Autoplay may be blocked by browser policy
-            });
+            audioElement.play().catch(() => {});
 
             // Save to history
             saveToHistory({
@@ -320,11 +362,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 voiceType: voiceType,
                 voiceName: voiceName,
                 rate: rate,
-                blobUrl: currentBlobUrl,
+                chunks: totalChunks,
                 timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
             });
 
-            showToast('Tạo giọng nói thành công!', 'success');
+            showToast(`Đã tạo và ghép thành công ${totalChunks} đoạn âm thanh!`, 'success');
         } catch (err) {
             showToast(`Lỗi tạo TTS: ${err.message}`, 'error');
             playerStatus.textContent = 'Thất bại';
@@ -391,17 +433,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveToHistory(item) {
         const history = loadHistory();
-        // Save metadata (exclude blob URL as it expires on reload)
         const historyItem = {
             id: item.id,
             text: item.text,
             voiceType: item.voiceType,
             voiceName: item.voiceName,
             rate: item.rate,
+            chunks: item.chunks || 1,
             timestamp: item.timestamp
         };
         history.unshift(historyItem);
-        // Keep max 20 items
         if (history.length > 20) history.pop();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
         renderHistory();
@@ -428,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="history-info">
                     <div class="history-meta">
                         <span>${item.voiceName || item.voiceType}</span>
-                        <span class="history-rate">(${item.rate}x &bull; ${item.timestamp})</span>
+                        <span class="history-rate">(${item.rate}x &bull; ${item.chunks || 1} đoạn &bull; ${item.timestamp})</span>
                     </div>
                     <div class="history-text" title="${item.text}">${item.text}</div>
                 </div>
@@ -439,7 +480,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            // Handle Reuse Button
             el.querySelector('.btn-reuse-history').addEventListener('click', () => {
                 textInput.value = item.text;
                 updateTextStats();
@@ -447,7 +487,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 rateValueDisplay.textContent = `${item.rate}x`;
                 updatePresetButtons(item.rate.toString());
                 
-                // Select voice if available
                 for (let i = 0; i < voiceSelect.options.length; i++) {
                     if (voiceSelect.options[i].value === item.voiceType) {
                         voiceSelect.selectedIndex = i;
