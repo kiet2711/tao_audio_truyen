@@ -58,7 +58,7 @@ class TTSRequest(BaseModel):
     voice: Optional[str] = Field("BV074_streaming", description="Mã voice_type")
     resource_id: Optional[str] = Field(None, description="Resource ID của voice")
     rate: Optional[float] = Field(1.0, ge=0.5, le=2.0, description="Tốc độ giọng đọc (0.5 đến 2.0)")
-    threads: Optional[int] = Field(10, ge=1, le=50, description="Số luồng xử lý đa luồng đồng thời")
+    threads: Optional[int] = Field(50, ge=1, le=200, description="Số luồng xử lý đa luồng đồng thời (mặc định 50, tối đa 200)")
     auto_split: Optional[bool] = Field(True, description="Tự động tách văn bản dài thành các đoạn nhỏ và ghép lại")
 
 
@@ -416,7 +416,7 @@ def start_tts_task(req: TTSRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
     rate_str = f"{req.rate:.1f}" if req.rate else "1.0"
-    num_threads = min(max(req.threads or 10, 1), 50)
+    num_threads = min(max(req.threads or 50, 1), 200)
 
     if req.auto_split and (len(text) > 200 or "\n" in text):
         chunks = split_text_into_chunks(text, max_chars=250)
@@ -523,7 +523,8 @@ def generate_tts(req: TTSRequest):
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
     rate_str = f"{req.rate:.1f}" if req.rate else "1.0"
-    num_threads = min(max(req.threads or 10, 1), 50)
+    num_threads = min(max(req.threads or 50, 1), 200)
+
 
     if req.auto_split and (len(text) > 200 or "\n" in text):
         chunks = split_text_into_chunks(text, max_chars=250)

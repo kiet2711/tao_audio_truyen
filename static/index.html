@@ -123,15 +123,15 @@
                                     </label>
                                     <span class="threads-desc">Xử lý song song nhiều đoạn cùng lúc</span>
                                 </div>
-                                <span class="rate-value threads-value" id="threadsValueDisplay">10 Luồng</span>
+                                <span class="rate-value threads-value" id="threadsValueDisplay">50 Luồng</span>
                             </div>
                             <div class="slider-wrapper">
-                                <input type="range" id="threadsSlider" min="1" max="50" step="1" value="10" class="custom-range">
+                                <input type="range" id="threadsSlider" min="1" max="200" step="1" value="50" class="custom-range">
                                 <div class="rate-ticks">
                                     <span>1 (Đơn luồng)</span>
-                                    <span>10 (Nhanh)</span>
-                                    <span>25 (Rất nhanh)</span>
-                                    <span>50 (Tối đa)</span>
+                                    <span>50 (Mặc định)</span>
+                                    <span>100 (Rất nhanh)</span>
+                                    <span>200 (Tối đa)</span>
                                 </div>
                             </div>
 
@@ -182,7 +182,7 @@
                             </div>
                             <div class="stat-item" id="chunkEstimateWrapper">
                                 <span class="stat-label">Ước tính:</span>
-                                <span class="stat-value chunk-badge" id="chunkEstimate">1 đoạn (10 luồng)</span>
+                                <span class="stat-value chunk-badge" id="chunkEstimate">1 đoạn (50 luồng)</span>
                             </div>
                         </div>
 
@@ -228,7 +228,7 @@
                             </div>
                             <div class="task-metric-item">
                                 <span class="metric-label">Đa luồng:</span>
-                                <span class="metric-value" id="taskThreadsBadge">10 Luồng</span>
+                                <span class="metric-value" id="taskThreadsBadge">50 Luồng</span>
                             </div>
                             <div class="task-metric-item">
                                 <span class="metric-label">Thời gian chạy:</span>

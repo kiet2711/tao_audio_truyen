@@ -344,7 +344,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         const voiceType = selectedOption.value;
         const resourceId = selectedOption.dataset.resourceId || null;
         const rate = parseFloat(rateSlider.value) || 1.0;
-        const threads = parseInt(threadsSlider.value, 10) || 10;
+        const threads = parseInt(threadsSlider.value, 10) || 50;
         const autoSplit = chkAutoSplit.checked;
         const voiceName = selectedOption.textContent;
 
