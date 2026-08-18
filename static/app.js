@@ -540,14 +540,12 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         currentTimeDisplay.textContent = '00:00';
         durationTimeDisplay.textContent = formatTime(duration);
         progressFill.style.width = '0%';
-        progressHandle.style.left = '0%';
 
         // Update Fixed Bottom Bar Information
         fixedTrackTitle.textContent = voiceName;
         fixedCurrentTime.textContent = '00:00';
         fixedDurationTime.textContent = formatTime(duration);
         fixedProgressFill.style.width = '0%';
-        fixedProgressHandle.style.left = '0%';
         fixedBottomPlayer.style.display = 'block';
 
         // Enable All Player Controls
@@ -657,9 +655,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         btnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
         fixedBtnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
         progressFill.style.width = '0%';
-        progressHandle.style.left = '0%';
         fixedProgressFill.style.width = '0%';
-        fixedProgressHandle.style.left = '0%';
         currentTimeDisplay.textContent = '00:00';
         fixedCurrentTime.textContent = '00:00';
         playerStatus.textContent = 'Đã phát xong';
@@ -845,10 +841,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         if (dur > 0) {
             const pct = Math.min(100, (audioElement.currentTime / dur) * 100);
             progressFill.style.width = `${pct}%`;
-            progressHandle.style.left = `${pct}%`;
-
             fixedProgressFill.style.width = `${pct}%`;
-            fixedProgressHandle.style.left = `${pct}%`;
 
             durationTimeDisplay.textContent = formatTime(dur);
             fixedDurationTime.textContent = formatTime(dur);
@@ -879,9 +872,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
                 audioElement.currentTime = ratio * dur;
                 const pct = ratio * 100;
                 progressFill.style.width = `${pct}%`;
-                progressHandle.style.left = `${pct}%`;
                 fixedProgressFill.style.width = `${pct}%`;
-                fixedProgressHandle.style.left = `${pct}%`;
                 currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
                 fixedCurrentTime.textContent = formatTime(audioElement.currentTime);
             }
