@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapCut Text to Speech - Chuyển văn bản thành giọng nói</title>
+    <meta name="description" content="Công cụ chuyển đổi văn bản thành giọng nói chuẩn CapCut trực tuyến với đầy đủ giọng đọc tự nhiên, chất lượng cao.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+        <div class="glow glow-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-waveform-lines"></i>
+                </div>
+                <div class="brand-info">
+                    <h1>CapCut TTS Studio</h1>
+                    <p class="brand-sub">Chuyển đổi văn bản sang giọng đọc tự nhiên & chân thực</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="device-badge" id="deviceBadge" title="Device ID hiện tại">
+                    <span class="status-dot"></span>
+                    <span class="device-label">Device ID:</span>
+                    <span class="device-id" id="currentDeviceId">Đang tải...</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btnResetDevice" title="Đổi ID thiết bị để gỡ giới hạn/ban">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Đổi ID (Gỡ Ban)</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Grid Layout -->
+        <main class="main-content">
+            <!-- Left Column: Settings & Input -->
+            <section class="editor-section">
+                <!-- Voice & Rate Settings Card -->
+                <div class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-microphone-lines"></i>
+                            <h2>Cấu hình giọng đọc</h2>
+                        </div>
+                        <span class="voice-count-badge" id="voiceCountBadge">Đang tải giọng...</span>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Language Filter Chips -->
+                        <div class="lang-filter-container">
+                            <label class="input-label">Ngôn ngữ:</label>
+                            <div class="lang-chips" id="langChips">
+                                <button class="chip active" data-lang="vi-VN">🇻🇳 Tiếng Việt</button>
+                                <button class="chip" data-lang="en-US">🇺🇸 English</button>
+                                <button class="chip" data-lang="zh-CN">🇨🇳 中文</button>
+                                <button class="chip" data-lang="ja-JP">🇯🇵 日本語</button>
+                                <button class="chip" data-lang="all">🌐 Tất cả</button>
+                            </div>
+                        </div>
+
+                        <!-- Voice Select & Search -->
+                        <div class="form-group">
+                            <div class="voice-search-wrapper">
+                                <div class="search-input-box">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="voiceSearchInput" placeholder="Tìm kiếm giọng đọc theo tên...">
+                                </div>
+                            </div>
+                            <div class="custom-select-wrapper">
+                                <select id="voiceSelect" class="form-select">
+                                    <option value="" disabled selected>Đang tải danh sách giọng...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Rate Slider -->
+                        <div class="form-group rate-group">
+                            <div class="rate-header">
+                                <label class="input-label" for="rateSlider">
+                                    <i class="fa-solid fa-gauge-high"></i> Tốc độ đọc:
+                                </label>
+                                <span class="rate-value" id="rateValueDisplay">1.0x</span>
+                            </div>
+                            <div class="slider-wrapper">
+                                <input type="range" id="rateSlider" min="0.5" max="2.0" step="0.1" value="1.0" class="custom-range">
+                                <div class="rate-ticks">
+                                    <span>0.5x</span>
+                                    <span>1.0x</span>
+                                    <span>1.5x</span>
+                                    <span>2.0x</span>
+                                </div>
+                            </div>
+                            <div class="rate-presets">
+                                <button class="btn-preset" data-rate="0.8">0.8x (Chậm)</button>
+                                <button class="btn-preset active" data-rate="1.0">1.0x (Chuẩn)</button>
+                                <button class="btn-preset" data-rate="1.2">1.2x (Nhanh)</button>
+                                <button class="btn-preset" data-rate="1.5">1.5x (Rất nhanh)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Input Card -->
+                <div class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-file-lines"></i>
+                            <h2>Văn bản cần đọc</h2>
+                        </div>
+                        <div class="text-actions">
+                            <button class="btn-text-action" id="btnSampleText" title="Điền văn bản mẫu">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Mẫu
+                            </button>
+                            <button class="btn-text-action" id="btnClearText" title="Xóa nội dung">
+                                <i class="fa-solid fa-trash-can"></i> Xóa
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="textarea-container">
+                            <textarea id="textInput" rows="6" placeholder="Nhập hoặc dán nội dung văn bản bạn muốn chuyển thành giọng nói vào đây..."></textarea>
+                        </div>
+
+                        <div class="text-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Ký tự:</span>
+                                <span class="stat-value" id="charCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Số từ:</span>
+                                <span class="stat-value" id="wordCount">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <div class="action-row">
+                            <button class="btn btn-primary btn-block" id="btnGenerate">
+                                <i class="fa-solid fa-play"></i>
+                                <span>Tạo Giọng Nói (TTS)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Column: Player & History -->
+            <section class="output-section">
+                <!-- Audio Player Card -->
+                <div class="card glass-card player-card" id="playerCard">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-volume-high"></i>
+                            <h2>Âm thanh tạo ra</h2>
+                        </div>
+                        <span class="player-status-badge" id="playerStatus">Chưa có âm thanh</span>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Visualizer / Waveform Animation -->
+                        <div class="visualizer-container" id="visualizer">
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                            <div class="wave-bar"></div>
+                        </div>
+
+                        <!-- Custom Player Controls -->
+                        <div class="player-info" id="playerInfo">
+                            <div class="info-voice-name" id="currentPlayingVoice">Chọn văn bản và bấm tạo âm thanh</div>
+                            <div class="info-text-preview" id="currentPlayingPreview">...</div>
+                        </div>
+
+                        <!-- Audio element -->
+                        <audio id="audioElement" preload="auto"></audio>
+
+                        <div class="audio-controls-custom">
+                            <div class="progress-bar-container" id="progressContainer">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="time-display">
+                                <span id="currentTime">00:00</span>
+                                <span id="durationTime">00:00</span>
+                            </div>
+
+                            <div class="player-buttons">
+                                <button class="btn-circle" id="btnPlayPause" disabled title="Phát/Dừng">
+                                    <i class="fa-solid fa-play"></i>
+                                </button>
+                                <a class="btn btn-secondary btn-download" id="btnDownload" href="#" download="speech.mp3" style="display: none;">
+                                    <i class="fa-solid fa-download"></i>
+                                    <span>Tải file MP3</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Card -->
+                <div class="card glass-card history-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <h2>Lịch sử tạo gần đây</h2>
+                        </div>
+                        <button class="btn-text-action" id="btnClearHistory" title="Xóa toàn bộ lịch sử">
+                            <i class="fa-solid fa-trash-can"></i> Xóa lịch sử
+                        </button>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="history-list" id="historyList">
+                            <div class="empty-history">
+                                <i class="fa-regular fa-folder-open"></i>
+                                <p>Chưa có lịch sử tạo âm thanh nào trong phiên này.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>CapCut Text-to-Speech Web App &bull; Sẵn sàng deploy Render.com</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- App Script -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
