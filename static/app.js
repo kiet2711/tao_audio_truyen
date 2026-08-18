@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskThreadsBadge = document.getElementById('taskThreadsBadge');
     const taskElapsedText = document.getElementById('taskElapsedText');
 
-    // Audio Player Elements
+    // Audio Player Elements (Card Player)
     const playerCard = document.getElementById('playerCard');
     const visualizer = document.getElementById('visualizer');
     const playerStatus = document.getElementById('playerStatus');
@@ -56,11 +56,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPlayPause = document.getElementById('btnPlayPause');
     const btnRewind10 = document.getElementById('btnRewind10');
     const btnForward10 = document.getElementById('btnForward10');
-    const btnSpeedToggle = document.getElementById('btnSpeedToggle');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnShuffle = document.getElementById('btnShuffle');
+    const btnRepeat = document.getElementById('btnRepeat');
 
+    const btnVolume = document.getElementById('btnVolume');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValText = document.getElementById('volumeValText');
+
+    const btnSettings = document.getElementById('btnSettings');
+    const speedMenuPopup = document.getElementById('speedMenuPopup');
+    const speedOptBtns = document.querySelectorAll('.speed-opt-btn');
+
+    const btnQuickDownload = document.getElementById('btnQuickDownload');
     const downloadArea = document.getElementById('downloadArea');
     const btnDownloadMain = document.getElementById('btnDownloadMain');
     const dlMetaInfo = document.getElementById('dlMetaInfo');
+
+    // Fixed Bottom Player Bar Elements
+    const fixedBottomPlayer = document.getElementById('fixedBottomPlayer');
+    const fixedProgressContainer = document.getElementById('fixedProgressContainer');
+    const fixedProgressFill = document.getElementById('fixedProgressFill');
+    const fixedProgressHandle = document.getElementById('fixedProgressHandle');
+    const fixedTrackTitle = document.getElementById('fixedTrackTitle');
+    const fixedCurrentTime = document.getElementById('fixedCurrentTime');
+    const fixedDurationTime = document.getElementById('fixedDurationTime');
+
+    const fixedBtnPlayPause = document.getElementById('fixedBtnPlayPause');
+    const fixedBtnRewind10 = document.getElementById('fixedBtnRewind10');
+    const fixedBtnForward10 = document.getElementById('fixedBtnForward10');
+    const fixedBtnPrev = document.getElementById('fixedBtnPrev');
+    const fixedBtnNext = document.getElementById('fixedBtnNext');
+    const fixedBtnShuffle = document.getElementById('fixedBtnShuffle');
+    const fixedBtnRepeat = document.getElementById('fixedBtnRepeat');
+    const fixedBtnSpeed = document.getElementById('fixedBtnSpeed');
+    const fixedBtnVolume = document.getElementById('fixedBtnVolume');
+    const fixedVolumeSlider = document.getElementById('fixedVolumeSlider');
+    const fixedBtnDownload = document.getElementById('fixedBtnDownload');
+    const btnHideFixedPlayer = document.getElementById('btnHideFixedPlayer');
 
     const historyList = document.getElementById('historyList');
     const btnClearHistory = document.getElementById('btnClearHistory');
@@ -73,6 +107,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentAudioDuration = 0;
     let isScrubbing = false;
     let activePlaybackSpeed = 1.0;
+    let isShuffle = false;
+    let repeatMode = 0; // 0: off, 1: repeat current, 2: repeat all
+    let lastVolume = 1.0;
+    let currentPlayingIndex = -1;
+
     let generationTimer = null;
     let generationStartTime = 0;
     const STORAGE_KEY = 'capcut_tts_web_history_v2';
@@ -124,7 +163,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         }, 4500);
     }
 
-    // --- Format Time Helper (HH:MM:SS or MM:SS) ---
+    // --- Format Time Helper (H:MM:SS or MM:SS) ---
     function formatTime(seconds) {
         if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) return '00:00';
         const totalSecs = Math.floor(seconds);
@@ -133,7 +172,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         const secs = totalSecs % 60;
 
         if (hrs > 0) {
-            return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
@@ -314,7 +353,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
     btnSampleLongText.addEventListener('click', () => {
         textInput.value = sampleLongStory;
         updateTextStats();
-        showToast('Đã nạp văn bản truyện dài mẫu! Bấm "Tạo Giọng Nói" để thử nghiệm đa luồng.', 'info');
+        showToast('Đã nạp văn bản truyện dài mẫu! Bấm "Tạo Giọng Nói" để trải nghiệm.', 'info');
     });
 
     btnClearText.addEventListener('click', () => {
@@ -326,7 +365,9 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
     textInput.value = "Xin chào! Bạn có thể nhập nội dung văn bản vào đây để tôi đọc cho bạn nghe nhé.";
     updateTextStats();
 
+    // ==========================================
     // --- TTS Generation with Real-time Progress Tracking ---
+    // ==========================================
     btnGenerate.addEventListener('click', async () => {
         const text = textInput.value.trim();
         if (!text) {
@@ -406,7 +447,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
             let finalDuration = 0;
             let finalSize = 0;
 
-            while (!isDone && pollAttempts < 1200) {
+            while (!isDone && pollAttempts < 1500) {
                 await new Promise(r => setTimeout(r, 400));
                 pollAttempts++;
 
@@ -450,55 +491,16 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
 
             const audioBlob = await audioRes.blob();
 
-            // Dọn dẹp URL blob cũ
-            if (currentBlobUrl) {
-                URL.revokeObjectURL(currentBlobUrl);
-            }
-
-            currentBlobUrl = URL.createObjectURL(audioBlob);
-            currentAudioDuration = finalDuration;
-
-            audioElement.src = currentBlobUrl;
-            audioElement.playbackRate = activePlaybackSpeed;
-
-            // Update Player UI
-            currentPlayingVoice.textContent = voiceName;
-            currentPlayingPreview.textContent = `Đã tạo & ghép hoàn tất ${totalChunks} đoạn (${text.length} ký tự)`;
-            playerStatus.textContent = `Đã xong (${formatTime(finalDuration)})`;
-            playerStatus.classList.add('active');
-
-            // Reset scrubber & set duration
-            progressFill.style.width = '0%';
-            currentTimeDisplay.textContent = '00:00';
-            durationTimeDisplay.textContent = formatTime(finalDuration);
-
-            // Enable player controls
-            btnPlayPause.disabled = false;
-            btnRewind10.disabled = false;
-            btnForward10.disabled = false;
-
-            // Setup Dedicated Download Button
-            const downloadFilename = `audio_story_${Date.now()}.mp3`;
-            btnDownloadMain.href = currentBlobUrl;
-            btnDownloadMain.download = downloadFilename;
-            dlMetaInfo.textContent = `${formatTime(finalDuration)} • ${formatFileSize(audioBlob.size)} • MP3`;
-            downloadArea.style.display = 'block';
-
-            // Auto Play Audio
-            audioElement.play().catch(() => {});
-
-            // Save to Local History
-            saveToHistory({
-                id: Date.now(),
-                taskId: taskId,
-                text: text,
-                voiceType: voiceType,
-                voiceName: voiceName,
-                rate: rate,
-                chunks: totalChunks,
+            // Load audio into our unified audio player
+            loadAudioBlobIntoPlayer({
+                blob: audioBlob,
                 duration: finalDuration,
-                size: audioBlob.size,
-                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                voiceName: voiceName,
+                voiceType: voiceType,
+                text: text,
+                totalChunks: totalChunks,
+                taskId: taskId,
+                rate: rate
             });
 
             showToast(`🎉 Đã tạo thành công ${totalChunks} đoạn âm thanh (${formatTime(finalDuration)})!`, 'success');
@@ -513,72 +515,347 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
         }
     });
 
-    // --- Audio Player Controls ---
-    btnPlayPause.addEventListener('click', () => {
+    // ==========================================
+    // --- Audio Player Controller (Image 2 UI) ---
+    // ==========================================
+    function loadAudioBlobIntoPlayer({ blob, duration, voiceName, voiceType, text, totalChunks, taskId, rate }) {
+        if (currentBlobUrl) {
+            URL.revokeObjectURL(currentBlobUrl);
+        }
+
+        currentBlobUrl = URL.createObjectURL(blob);
+        currentAudioDuration = duration;
+
+        audioElement.src = currentBlobUrl;
+        audioElement.playbackRate = activePlaybackSpeed;
+        audioElement.volume = lastVolume;
+
+        // Update Card Player Information
+        currentPlayingVoice.textContent = voiceName;
+        currentPlayingPreview.textContent = `Đã tạo & ghép hoàn tất ${totalChunks} đoạn (${text.length} ký tự)`;
+        playerStatus.textContent = `Sẵn sàng (${formatTime(duration)})`;
+        playerStatus.classList.add('active');
+
+        // Update Time displays
+        currentTimeDisplay.textContent = '00:00';
+        durationTimeDisplay.textContent = formatTime(duration);
+        progressFill.style.width = '0%';
+        progressHandle.style.left = '0%';
+
+        // Update Fixed Bottom Bar Information
+        fixedTrackTitle.textContent = voiceName;
+        fixedCurrentTime.textContent = '00:00';
+        fixedDurationTime.textContent = formatTime(duration);
+        fixedProgressFill.style.width = '0%';
+        fixedProgressHandle.style.left = '0%';
+        fixedBottomPlayer.style.display = 'block';
+
+        // Enable All Player Controls
+        enablePlayerControls(true);
+
+        // Setup Download Links
+        const downloadFilename = `audio_story_${voiceType}_${Date.now()}.mp3`;
+        btnQuickDownload.href = currentBlobUrl;
+        btnQuickDownload.download = downloadFilename;
+        btnQuickDownload.style.display = 'flex';
+
+        fixedBtnDownload.href = currentBlobUrl;
+        fixedBtnDownload.download = downloadFilename;
+
+        btnDownloadMain.href = currentBlobUrl;
+        btnDownloadMain.download = downloadFilename;
+        dlMetaInfo.textContent = `${formatTime(duration)} • ${formatFileSize(blob.size)} • MP3`;
+        downloadArea.style.display = 'block';
+
+        // Auto Play
+        audioElement.play().catch(() => {
+            console.log('Autoplay was blocked by browser policy; user can click Play.');
+        });
+
+        // Save to History
+        saveToHistory({
+            id: Date.now(),
+            taskId: taskId,
+            text: text,
+            voiceType: voiceType,
+            voiceName: voiceName,
+            rate: rate,
+            chunks: totalChunks,
+            duration: duration,
+            size: blob.size,
+            timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        });
+    }
+
+    function enablePlayerControls(enabled = true) {
+        const controls = [
+            btnPlayPause, btnRewind10, btnForward10, btnPrev, btnNext, btnShuffle, btnRepeat,
+            fixedBtnPlayPause, fixedBtnRewind10, fixedBtnForward10, fixedBtnPrev, fixedBtnNext, fixedBtnShuffle, fixedBtnRepeat
+        ];
+        controls.forEach(ctrl => {
+            if (ctrl) ctrl.disabled = !enabled;
+        });
+    }
+
+    // --- Play / Pause Toggle ---
+    function togglePlayPause() {
         if (!audioElement.src) return;
         if (audioElement.paused) {
             audioElement.play();
         } else {
             audioElement.pause();
         }
-    });
+    }
 
-    btnRewind10.addEventListener('click', () => {
-        if (!audioElement.src) return;
-        audioElement.currentTime = Math.max(0, audioElement.currentTime - 10);
-    });
+    btnPlayPause.addEventListener('click', togglePlayPause);
+    fixedBtnPlayPause.addEventListener('click', togglePlayPause);
 
-    btnForward10.addEventListener('click', () => {
-        if (!audioElement.src) return;
-        const dur = currentAudioDuration || audioElement.duration || 0;
-        audioElement.currentTime = Math.min(dur, audioElement.currentTime + 10);
-    });
-
-    // Cycle Playback Speeds: 1.0x -> 1.25x -> 1.5x -> 2.0x -> 0.8x
-    const speedCycle = [1.0, 1.25, 1.5, 2.0, 0.8];
-    btnSpeedToggle.addEventListener('click', () => {
-        const currIdx = speedCycle.indexOf(activePlaybackSpeed);
-        const nextIdx = (currIdx + 1) % speedCycle.length;
-        activePlaybackSpeed = speedCycle[nextIdx];
-        audioElement.playbackRate = activePlaybackSpeed;
-        btnSpeedToggle.textContent = `${activePlaybackSpeed.toFixed(1)}x`;
-        showToast(`Tốc độ phát: ${activePlaybackSpeed.toFixed(1)}x`, 'info');
-    });
-
+    // Audio Play / Pause Events (Sync UI)
     audioElement.addEventListener('play', () => {
         btnPlayPause.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        fixedBtnPlayPause.innerHTML = '<i class="fa-solid fa-pause"></i>';
         visualizer.classList.add('playing');
         playerStatus.textContent = 'Đang phát';
+        playerStatus.classList.add('active');
     });
 
     audioElement.addEventListener('pause', () => {
         btnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
+        fixedBtnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
         visualizer.classList.remove('playing');
         playerStatus.textContent = 'Tạm dừng';
     });
 
+    // --- Ended Handler with Shuffle & Repeat ---
     audioElement.addEventListener('ended', () => {
-        btnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
         visualizer.classList.remove('playing');
+
+        if (repeatMode === 1) {
+            // Repeat current track
+            audioElement.currentTime = 0;
+            audioElement.play();
+            return;
+        }
+
+        const history = loadHistory();
+
+        if (isShuffle && history.length > 1) {
+            // Pick random history track
+            const randomIdx = Math.floor(Math.random() * history.length);
+            playHistoryTrackByIndex(randomIdx);
+            return;
+        }
+
+        if (repeatMode === 2 && history.length > 0) {
+            // Play next in history
+            const nextIdx = (currentPlayingIndex + 1) % history.length;
+            playHistoryTrackByIndex(nextIdx);
+            return;
+        }
+
+        // Normal ended
+        btnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
+        fixedBtnPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
         progressFill.style.width = '0%';
+        progressHandle.style.left = '0%';
+        fixedProgressFill.style.width = '0%';
+        fixedProgressHandle.style.left = '0%';
         currentTimeDisplay.textContent = '00:00';
+        fixedCurrentTime.textContent = '00:00';
         playerStatus.textContent = 'Đã phát xong';
     });
+
+    // --- Seek Controls ---
+    function rewind10() {
+        if (!audioElement.src) return;
+        audioElement.currentTime = Math.max(0, audioElement.currentTime - 10);
+    }
+
+    function forward10() {
+        if (!audioElement.src) return;
+        const dur = getEffectiveDuration();
+        audioElement.currentTime = Math.min(dur, audioElement.currentTime + 10);
+    }
+
+    btnRewind10.addEventListener('click', rewind10);
+    fixedBtnRewind10.addEventListener('click', rewind10);
+    btnForward10.addEventListener('click', forward10);
+    fixedBtnForward10.addEventListener('click', forward10);
+
+    // Prev / Next Track navigation
+    function handlePrevTrack() {
+        if (!audioElement.src) return;
+        if (audioElement.currentTime > 3) {
+            audioElement.currentTime = 0;
+            return;
+        }
+        const history = loadHistory();
+        if (history.length > 1 && currentPlayingIndex > 0) {
+            playHistoryTrackByIndex(currentPlayingIndex - 1);
+        } else {
+            audioElement.currentTime = 0;
+        }
+    }
+
+    function handleNextTrack() {
+        if (!audioElement.src) return;
+        const history = loadHistory();
+        if (history.length > 1 && currentPlayingIndex < history.length - 1) {
+            playHistoryTrackByIndex(currentPlayingIndex + 1);
+        } else {
+            const dur = getEffectiveDuration();
+            audioElement.currentTime = dur;
+        }
+    }
+
+    btnPrev.addEventListener('click', handlePrevTrack);
+    fixedBtnPrev.addEventListener('click', handlePrevTrack);
+    btnNext.addEventListener('click', handleNextTrack);
+    fixedBtnNext.addEventListener('click', handleNextTrack);
+
+    // --- Shuffle & Repeat Toggle ---
+    function toggleShuffle() {
+        isShuffle = !isShuffle;
+        btnShuffle.classList.toggle('active', isShuffle);
+        fixedBtnShuffle.classList.toggle('active', isShuffle);
+        showToast(isShuffle ? 'Đã bật phát ngẫu nhiên (Shuffle)' : 'Đã tắt phát ngẫu nhiên', 'info');
+    }
+
+    btnShuffle.addEventListener('click', toggleShuffle);
+    fixedBtnShuffle.addEventListener('click', toggleShuffle);
+
+    function toggleRepeat() {
+        repeatMode = (repeatMode + 1) % 3;
+        if (repeatMode === 0) {
+            btnRepeat.classList.remove('active');
+            fixedBtnRepeat.classList.remove('active');
+            btnRepeat.title = 'Lặp lại: Tắt';
+            fixedBtnRepeat.title = 'Lặp lại: Tắt';
+            showToast('Chế độ lặp lại: Tắt', 'info');
+        } else if (repeatMode === 1) {
+            btnRepeat.classList.add('active');
+            fixedBtnRepeat.classList.add('active');
+            btnRepeat.title = 'Lặp lại: 1 bài hiện tại';
+            fixedBtnRepeat.title = 'Lặp lại: 1 bài hiện tại';
+            showToast('Chế độ lặp lại: Lặp lại bài này', 'info');
+        } else {
+            btnRepeat.classList.add('active');
+            fixedBtnRepeat.classList.add('active');
+            btnRepeat.title = 'Lặp lại: Toàn bộ danh sách';
+            fixedBtnRepeat.title = 'Lặp lại: Toàn bộ danh sách';
+            showToast('Chế độ lặp lại: Lặp lại toàn bộ', 'info');
+        }
+    }
+
+    btnRepeat.addEventListener('click', toggleRepeat);
+    fixedBtnRepeat.addEventListener('click', toggleRepeat);
+
+    // --- Volume & Mute Controls ---
+    function setVolume(val) {
+        val = Math.max(0, Math.min(1, val));
+        audioElement.volume = val;
+        volumeSlider.value = val;
+        fixedVolumeSlider.value = val;
+        volumeValText.textContent = `${Math.round(val * 100)}%`;
+
+        let iconClass = 'fa-volume-high';
+        if (val === 0) iconClass = 'fa-volume-xmark';
+        else if (val < 0.5) iconClass = 'fa-volume-low';
+
+        btnVolume.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+        fixedBtnVolume.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+        if (val > 0) lastVolume = val;
+    }
+
+    volumeSlider.addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
+    fixedVolumeSlider.addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
+
+    function toggleMute() {
+        if (audioElement.volume > 0) {
+            lastVolume = audioElement.volume;
+            setVolume(0);
+        } else {
+            setVolume(lastVolume || 1.0);
+        }
+    }
+
+    btnVolume.addEventListener('click', toggleMute);
+    fixedBtnVolume.addEventListener('click', toggleMute);
+
+    // --- Speed Settings ---
+    function setPlaybackSpeed(speed) {
+        activePlaybackSpeed = speed;
+        audioElement.playbackRate = speed;
+        fixedBtnSpeed.textContent = `${speed.toFixed(speed % 1 === 0 ? 1 : 2)}x`;
+
+        speedOptBtns.forEach(btn => {
+            if (parseFloat(btn.dataset.speed) === speed) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    btnSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        speedMenuPopup.classList.toggle('open');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.settings-control-wrapper')) {
+            speedMenuPopup.classList.remove('open');
+        }
+    });
+
+    speedOptBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const spd = parseFloat(btn.dataset.speed);
+            setPlaybackSpeed(spd);
+            speedMenuPopup.classList.remove('open');
+            showToast(`Tốc độ phát: ${spd}x`, 'info');
+        });
+    });
+
+    const speedCycle = [1.0, 1.25, 1.5, 2.0, 0.8];
+    fixedBtnSpeed.addEventListener('click', () => {
+        const currIdx = speedCycle.indexOf(activePlaybackSpeed);
+        const nextIdx = (currIdx + 1) % speedCycle.length;
+        setPlaybackSpeed(speedCycle[nextIdx]);
+        showToast(`Tốc độ phát: ${activePlaybackSpeed}x`, 'info');
+    });
+
+    // Hide fixed player bar button
+    btnHideFixedPlayer.addEventListener('click', () => {
+        fixedBottomPlayer.style.display = 'none';
+    });
+
+    // --- Scrubber Helper ---
+    function getEffectiveDuration() {
+        return (currentAudioDuration && currentAudioDuration > 0)
+            ? currentAudioDuration
+            : (audioElement.duration && isFinite(audioElement.duration) ? audioElement.duration : 0);
+    }
 
     // Smooth Scrubber & Accurate Duration Display
     audioElement.addEventListener('timeupdate', () => {
         if (isScrubbing) return;
-        const effectiveDuration = (currentAudioDuration && currentAudioDuration > 0)
-            ? currentAudioDuration
-            : (audioElement.duration && isFinite(audioElement.duration) ? audioElement.duration : 0);
+        const dur = getEffectiveDuration();
 
-        if (effectiveDuration > 0) {
-            const pct = Math.min(100, (audioElement.currentTime / effectiveDuration) * 100);
+        if (dur > 0) {
+            const pct = Math.min(100, (audioElement.currentTime / dur) * 100);
             progressFill.style.width = `${pct}%`;
-            durationTimeDisplay.textContent = formatTime(effectiveDuration);
+            progressHandle.style.left = `${pct}%`;
+
+            fixedProgressFill.style.width = `${pct}%`;
+            fixedProgressHandle.style.left = `${pct}%`;
+
+            durationTimeDisplay.textContent = formatTime(dur);
+            fixedDurationTime.textContent = formatTime(dur);
         }
 
         currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
+        fixedCurrentTime.textContent = formatTime(audioElement.currentTime);
     });
 
     audioElement.addEventListener('loadedmetadata', () => {
@@ -586,63 +863,96 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
             currentAudioDuration = audioElement.duration;
         }
         durationTimeDisplay.textContent = formatTime(currentAudioDuration);
+        fixedDurationTime.textContent = formatTime(currentAudioDuration);
     });
 
-    // Scrubber Seeking Events (Click & Drag)
-    function seekToPosition(e) {
-        const rect = progressContainer.getBoundingClientRect();
-        const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-        const ratio = clickX / rect.width;
-        const effectiveDuration = (currentAudioDuration && currentAudioDuration > 0)
-            ? currentAudioDuration
-            : (audioElement.duration && isFinite(audioElement.duration) ? audioElement.duration : 0);
+    // Scrubber Seeking Events for any track container
+    function bindScrubber(container) {
+        function seek(e) {
+            const rect = container.getBoundingClientRect();
+            const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
+            const ratio = clickX / rect.width;
+            const dur = getEffectiveDuration();
 
-        if (effectiveDuration > 0) {
-            audioElement.currentTime = ratio * effectiveDuration;
-            progressFill.style.width = `${ratio * 100}%`;
-            currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
-        }
-    }
-
-    progressContainer.addEventListener('mousedown', (e) => {
-        if (!audioElement.src) return;
-        isScrubbing = true;
-        seekToPosition(e);
-
-        function onMouseMove(moveEvent) {
-            if (isScrubbing) {
-                seekToPosition(moveEvent);
+            if (dur > 0) {
+                audioElement.currentTime = ratio * dur;
+                const pct = ratio * 100;
+                progressFill.style.width = `${pct}%`;
+                progressHandle.style.left = `${pct}%`;
+                fixedProgressFill.style.width = `${pct}%`;
+                fixedProgressHandle.style.left = `${pct}%`;
+                currentTimeDisplay.textContent = formatTime(audioElement.currentTime);
+                fixedCurrentTime.textContent = formatTime(audioElement.currentTime);
             }
         }
 
-        function onMouseUp() {
+        container.addEventListener('mousedown', (e) => {
+            if (!audioElement.src) return;
+            isScrubbing = true;
+            seek(e);
+
+            function onMouseMove(moveEvent) {
+                if (isScrubbing) seek(moveEvent);
+            }
+
+            function onMouseUp() {
+                isScrubbing = false;
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+            }
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+
+        container.addEventListener('touchstart', (e) => {
+            if (!audioElement.src || !e.touches[0]) return;
+            isScrubbing = true;
+            seek(e);
+        });
+
+        container.addEventListener('touchmove', (e) => {
+            if (isScrubbing && e.touches[0]) seek(e);
+        });
+
+        container.addEventListener('touchend', () => {
             isScrubbing = false;
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    bindScrubber(progressContainer);
+    bindScrubber(fixedProgressContainer);
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        // Do not trigger if typing in text inputs
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlayPause();
+        } else if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            rewind10();
+        } else if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            forward10();
+        } else if (e.code === 'ArrowUp') {
+            e.preventDefault();
+            setVolume(audioElement.volume + 0.1);
+        } else if (e.code === 'ArrowDown') {
+            e.preventDefault();
+            setVolume(audioElement.volume - 0.1);
+        } else if (e.code === 'KeyM') {
+            e.preventDefault();
+            toggleMute();
         }
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
     });
 
-    // Touch support for mobile scrubber
-    progressContainer.addEventListener('touchstart', (e) => {
-        if (!audioElement.src || !e.touches[0]) return;
-        isScrubbing = true;
-        seekToPosition(e.touches[0]);
-    });
-
-    progressContainer.addEventListener('touchmove', (e) => {
-        if (isScrubbing && e.touches[0]) {
-            seekToPosition(e.touches[0]);
-        }
-    });
-
-    progressContainer.addEventListener('touchend', () => {
-        isScrubbing = false;
-    });
-
+    // ==========================================
     // --- History Management ---
+    // ==========================================
     function loadHistory() {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
@@ -655,9 +965,37 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
     function saveToHistory(item) {
         const history = loadHistory();
         history.unshift(item);
-        if (history.length > 25) history.pop();
+        if (history.length > 30) history.pop();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
         renderHistory();
+    }
+
+    async function playHistoryTrackByIndex(index) {
+        const history = loadHistory();
+        if (index < 0 || index >= history.length) return;
+        const item = history[index];
+        currentPlayingIndex = index;
+
+        if (item.taskId) {
+            try {
+                showToast(`Đang tải audio "${item.voiceName || item.voiceType}" từ lịch sử...`, 'info');
+                const res = await fetch(`/api/tts/audio/${item.taskId}`);
+                if (!res.ok) throw new Error('Audio đã hết hạn trên server cache.');
+                const blob = await res.blob();
+                loadAudioBlobIntoPlayer({
+                    blob: blob,
+                    duration: item.duration || 0,
+                    voiceName: item.voiceName || item.voiceType,
+                    voiceType: item.voiceType,
+                    text: item.text,
+                    totalChunks: item.chunks || 1,
+                    taskId: item.taskId,
+                    rate: item.rate || 1.0
+                });
+            } catch (err) {
+                showToast(`Không thể phát: ${err.message}`, 'error');
+            }
+        }
     }
 
     function renderHistory() {
@@ -674,7 +1012,7 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
             return;
         }
 
-        history.forEach(item => {
+        history.forEach((item, index) => {
             const el = document.createElement('div');
             el.className = 'history-item';
             const durStr = item.duration ? formatTime(item.duration) : '';
@@ -690,6 +1028,9 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
                 </div>
                 <div class="history-actions">
                     ${item.taskId ? `
+                    <button class="btn-icon btn-history-play" title="Nghe đoạn này">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
                     <button class="btn-icon btn-history-dl" title="Tải file MP3 này">
                         <i class="fa-solid fa-download"></i>
                     </button>` : ''}
@@ -698,6 +1039,14 @@ Người đàn ông khoác một chiếc áo măng tô dạ đen tuyền, gươn
                     </button>
                 </div>
             `;
+
+            // Play action from history
+            const btnPlay = el.querySelector('.btn-history-play');
+            if (btnPlay) {
+                btnPlay.addEventListener('click', () => {
+                    playHistoryTrackByIndex(index);
+                });
+            }
 
             // Download action from history
             const btnDl = el.querySelector('.btn-history-dl');

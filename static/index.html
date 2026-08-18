@@ -249,26 +249,22 @@
                     </div>
 
                     <div class="card-body">
-                        <!-- Visualizer Waveform Animation -->
-                        <div class="visualizer-container" id="visualizer">
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                            <div class="wave-bar"></div>
-                        </div>
-
-                        <!-- Custom Player Details -->
-                        <div class="player-info" id="playerInfo">
-                            <div class="info-voice-name" id="currentPlayingVoice">Chọn văn bản và bấm tạo âm thanh</div>
-                            <div class="info-text-preview" id="currentPlayingPreview">Chưa có file âm thanh nào được nạp.</div>
+                        <!-- Custom Player Details & Mini Wave -->
+                        <div class="player-meta-row">
+                            <div class="player-info-badge">
+                                <div class="info-voice-name" id="currentPlayingVoice">Chọn văn bản và bấm tạo âm thanh</div>
+                                <div class="info-text-preview" id="currentPlayingPreview">Chưa có file âm thanh nào được nạp.</div>
+                            </div>
+                            <div class="mini-visualizer" id="visualizer">
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                            </div>
                         </div>
 
                         <!-- Safe audio element container -->
@@ -276,51 +272,99 @@
                             <audio id="audioElement" preload="auto"></audio>
                         </div>
 
-                        <!-- Player Controls & Timeline -->
-                        <div class="audio-controls-custom">
-                            <!-- Timeline Scrubber -->
-                            <div class="progress-bar-container" id="progressContainer" title="Bấm hoặc kéo để tua">
-                                <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
-                                <div class="progress-scrubber-handle" id="progressHandle"></div>
-                            </div>
-                            
-                            <div class="time-display">
-                                <span class="time-current" id="currentTime">00:00</span>
-                                <span class="time-divider">/</span>
-                                <span class="time-duration" id="durationTime">00:00</span>
-                            </div>
-
-                            <!-- Playback Control Buttons -->
-                            <div class="player-buttons">
-                                <button class="btn-ctrl-secondary" id="btnRewind10" disabled title="Lùi lại 10 giây">
-                                    <i class="fa-solid fa-rotate-left"></i>
-                                    <span>-10s</span>
-                                </button>
-                                
-                                <button class="btn-circle" id="btnPlayPause" disabled title="Phát / Tạm dừng">
-                                    <i class="fa-solid fa-play"></i>
-                                </button>
-
-                                <button class="btn-ctrl-secondary" id="btnForward10" disabled title="Tua tới 10 giây">
-                                    <i class="fa-solid fa-rotate-right"></i>
-                                    <span>+10s</span>
-                                </button>
-
-                                <div class="playback-speed-wrapper">
-                                    <button class="btn-speed-toggle" id="btnSpeedToggle" title="Tốc độ phát">1.0x</button>
+                        <!-- Exact Audio Player Component (As shown in design) -->
+                        <div class="custom-audio-player-box" id="playerBox">
+                            <!-- Timeline Slider -->
+                            <div class="player-timeline-wrapper">
+                                <div class="player-timeline-track" id="progressContainer" title="Bấm hoặc kéo để tua">
+                                    <div class="player-timeline-fill" id="progressFill" style="width: 0%;"></div>
+                                    <div class="player-timeline-thumb" id="progressHandle" style="left: 0%;"></div>
+                                </div>
+                                <div class="player-time-labels">
+                                    <span class="time-label current-time" id="currentTime">00:00</span>
+                                    <span class="time-label total-duration" id="durationTime">00:00</span>
                                 </div>
                             </div>
 
-                            <!-- Dedicated Download Button Area -->
-                            <div class="download-action-area" id="downloadArea" style="display: none;">
-                                <a class="btn btn-download-primary" id="btnDownloadMain" href="#" download="audio_story.mp3">
-                                    <i class="fa-solid fa-download"></i>
-                                    <div class="download-btn-text">
-                                        <span class="dl-title">TẢI FILE AUDIO (.MP3)</span>
-                                        <span class="dl-meta" id="dlMetaInfo">Sẵn sàng tải về</span>
+                            <!-- Controls Row -->
+                            <div class="player-controls-row">
+                                <!-- Left: Shuffle & Repeat -->
+                                <div class="ctrl-group left-group">
+                                    <button class="player-icon-btn" id="btnShuffle" title="Phát ngẫu nhiên (Shuffle)" disabled>
+                                        <i class="fa-solid fa-shuffle"></i>
+                                    </button>
+                                    <button class="player-icon-btn" id="btnRepeat" title="Chế độ lặp lại (Repeat)" disabled>
+                                        <i class="fa-solid fa-repeat"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Center: Prev, Rewind 10s, Play/Pause Pink Glow, Forward 10s, Next -->
+                                <div class="ctrl-group center-group">
+                                    <button class="player-icon-btn ctrl-nav-btn" id="btnPrev" title="Về đầu (-100%)" disabled>
+                                        <i class="fa-solid fa-backward-step"></i>
+                                    </button>
+                                    <button class="player-icon-btn ctrl-skip-btn" id="btnRewind10" title="Lùi lại 10 giây" disabled>
+                                        <i class="fa-solid fa-backward"></i>
+                                    </button>
+                                    <button class="player-play-btn" id="btnPlayPause" title="Phát / Tạm dừng" disabled>
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+                                    <button class="player-icon-btn ctrl-skip-btn" id="btnForward10" title="Tua tới 10 giây" disabled>
+                                        <i class="fa-solid fa-forward"></i>
+                                    </button>
+                                    <button class="player-icon-btn ctrl-nav-btn" id="btnNext" title="Tới cuối (+100%)" disabled>
+                                        <i class="fa-solid fa-forward-step"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Right: Volume, Settings/Speed, Download -->
+                                <div class="ctrl-group right-group">
+                                    <!-- Volume with Popover Slider -->
+                                    <div class="volume-control-wrapper">
+                                        <button class="player-icon-btn" id="btnVolume" title="Âm lượng">
+                                            <i class="fa-solid fa-volume-high"></i>
+                                        </button>
+                                        <div class="volume-slider-popup" id="volumePopup">
+                                            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" class="volume-range">
+                                            <span class="volume-val-text" id="volumeValText">100%</span>
+                                        </div>
                                     </div>
-                                </a>
+
+                                    <!-- Speed / Settings Dropdown -->
+                                    <div class="settings-control-wrapper">
+                                        <button class="player-icon-btn" id="btnSettings" title="Cài đặt tốc độ">
+                                            <i class="fa-solid fa-gear"></i>
+                                        </button>
+                                        <div class="speed-menu-popup" id="speedMenuPopup">
+                                            <div class="speed-menu-title">Tốc độ phát</div>
+                                            <div class="speed-options-grid">
+                                                <button class="speed-opt-btn" data-speed="0.5">0.5x</button>
+                                                <button class="speed-opt-btn" data-speed="0.8">0.8x</button>
+                                                <button class="speed-opt-btn active" data-speed="1.0">1.0x</button>
+                                                <button class="speed-opt-btn" data-speed="1.25">1.25x</button>
+                                                <button class="speed-opt-btn" data-speed="1.5">1.5x</button>
+                                                <button class="speed-opt-btn" data-speed="2.0">2.0x</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Direct Download Button in Player -->
+                                    <a class="player-icon-btn btn-player-download" id="btnQuickDownload" title="Tải file MP3" href="#" download="audio_story.mp3" style="display: none;">
+                                        <i class="fa-solid fa-download"></i>
+                                    </a>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- Dedicated Download Banner -->
+                        <div class="download-action-area" id="downloadArea" style="display: none;">
+                            <a class="btn btn-download-primary" id="btnDownloadMain" href="#" download="audio_story.mp3">
+                                <i class="fa-solid fa-cloud-arrow-down"></i>
+                                <div class="download-btn-text">
+                                    <span class="dl-title">TẢI FILE AUDIO (.MP3)</span>
+                                    <span class="dl-meta" id="dlMetaInfo">Sẵn sàng tải về</span>
+                                </div>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -353,6 +397,70 @@
         <footer class="app-footer">
             <p>CapCut Text-to-Speech Web Studio &bull; Tách đoạn thông minh & Xử lý đa luồng siêu tốc</p>
         </footer>
+    </div>
+
+    <!-- Fixed Bottom Floating Audio Player Bar -->
+    <div class="fixed-bottom-player" id="fixedBottomPlayer" style="display: none;">
+        <div class="fixed-player-timeline" id="fixedProgressContainer" title="Bấm hoặc kéo để tua">
+            <div class="fixed-player-fill" id="fixedProgressFill" style="width: 0%;"></div>
+            <div class="fixed-player-thumb" id="fixedProgressHandle" style="left: 0%;"></div>
+        </div>
+        <div class="fixed-player-body">
+            <!-- Left: Info -->
+            <div class="fixed-track-info">
+                <div class="fixed-avatar-icon">
+                    <i class="fa-solid fa-headphones"></i>
+                </div>
+                <div class="fixed-track-details">
+                    <span class="fixed-track-title" id="fixedTrackTitle">Đang phát audio</span>
+                    <span class="fixed-track-time">
+                        <span id="fixedCurrentTime">00:00</span> / <span id="fixedDurationTime">00:00</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Center: Controls -->
+            <div class="fixed-controls-center">
+                <button class="player-icon-btn" id="fixedBtnShuffle" title="Shuffle">
+                    <i class="fa-solid fa-shuffle"></i>
+                </button>
+                <button class="player-icon-btn" id="fixedBtnRepeat" title="Repeat">
+                    <i class="fa-solid fa-repeat"></i>
+                </button>
+                <button class="player-icon-btn ctrl-nav-btn" id="fixedBtnPrev" title="Về đầu">
+                    <i class="fa-solid fa-backward-step"></i>
+                </button>
+                <button class="player-icon-btn ctrl-skip-btn" id="fixedBtnRewind10" title="Lùi 10s">
+                    <i class="fa-solid fa-backward"></i>
+                </button>
+                <button class="player-play-btn fixed-play-btn" id="fixedBtnPlayPause" title="Phát / Tạm dừng">
+                    <i class="fa-solid fa-play"></i>
+                </button>
+                <button class="player-icon-btn ctrl-skip-btn" id="fixedBtnForward10" title="Tới 10s">
+                    <i class="fa-solid fa-forward"></i>
+                </button>
+                <button class="player-icon-btn ctrl-nav-btn" id="fixedBtnNext" title="Tới cuối">
+                    <i class="fa-solid fa-forward-step"></i>
+                </button>
+            </div>
+
+            <!-- Right: Options & Actions -->
+            <div class="fixed-controls-right">
+                <button class="fixed-speed-badge" id="fixedBtnSpeed" title="Đổi tốc độ phát">1.0x</button>
+                <div class="fixed-volume-wrapper">
+                    <button class="player-icon-btn" id="fixedBtnVolume" title="Âm lượng">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+                    <input type="range" id="fixedVolumeSlider" min="0" max="1" step="0.05" value="1" class="fixed-volume-range">
+                </div>
+                <a class="player-icon-btn btn-player-download fixed-dl-btn" id="fixedBtnDownload" title="Tải file MP3" href="#" download="audio_story.mp3">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+                <button class="player-icon-btn fixed-close-btn" id="btnHideFixedPlayer" title="Ẩn thanh phát">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notification Container -->

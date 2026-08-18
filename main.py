@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 import requests
-from fastapi import FastAPI, HTTPException, Query, Response, status, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, Response, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -484,8 +484,8 @@ def get_tts_status(task_id: str):
 
 
 @app.get("/api/tts/audio/{task_id}")
-def get_tts_audio(task_id: str):
-    """Tải hoặc nghe stream file MP3 hoàn chỉnh của task đã hoàn thành."""
+def get_tts_audio(task_id: str, request: Request = None):
+    """Tải hoặc nghe stream file MP3 hoàn chỉnh của task đã hoàn thành (hỗ trợ Range 206)."""
     with tasks_lock:
         task = TASKS.get(task_id)
         if not task:
@@ -497,6 +497,34 @@ def get_tts_audio(task_id: str):
         audio_data = task["audio_bytes"]
         duration = task.get("duration_seconds", 0.0)
         total_chunks = task.get("total_chunks", 1)
+
+    file_size = len(audio_data)
+
+    # Handle Range header for fast media seeking in HTML5 audio
+    range_header = request.headers.get("Range") if request else None
+    if range_header:
+        try:
+            h_range = range_header.replace("bytes=", "").split("-")
+            start = int(h_range[0]) if h_range[0] else 0
+            end = int(h_range[1]) if len(h_range) > 1 and h_range[1] else file_size - 1
+            if end >= file_size:
+                end = file_size - 1
+            content_length = (end - start) + 1
+            chunk_data = audio_data[start : end + 1]
+            return Response(
+                content=chunk_data,
+                status_code=206,
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(content_length),
+                    "Content-Type": "audio/mpeg",
+                    "X-Audio-Duration": str(duration),
+                    "X-Total-Chunks": str(total_chunks),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Error handling Range request: {e}")
 
     return Response(
         content=audio_data,
