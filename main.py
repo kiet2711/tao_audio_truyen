@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import uuid
+import time
 import base64
 import logging
 import threading
@@ -9,9 +11,9 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 import requests
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import FastAPI, HTTPException, Query, Response, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -23,8 +25,8 @@ logger = logging.getLogger("capcut-tts-web")
 
 app = FastAPI(
     title="CapCut Text-to-Speech Web API",
-    description="Web service and API for CapCut Text-to-Speech (TTS) with multi-threading and smart text chunking",
-    version="1.1.0",
+    description="Web service and API for CapCut Text-to-Speech (TTS) with multi-threading, smart text chunking and real-time progress tracking",
+    version="1.2.0",
 )
 
 # Enable CORS for web clients
@@ -34,6 +36,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Chunks", "X-Audio-Duration", "Content-Disposition"],
 )
 
 # Base directory
@@ -44,6 +47,10 @@ VOICE_JSON_PATH = BASE_DIR / "Voice.json"
 # Shared client instance & lock for device operations
 client = CapCutClient()
 device_lock = threading.Lock()
+
+# Task management for real-time progress
+tasks_lock = threading.Lock()
+TASKS: Dict[str, Dict[str, Any]] = {}
 
 
 class TTSRequest(BaseModel):
@@ -61,6 +68,74 @@ class ResetDeviceResponse(BaseModel):
     message: str
 
 
+def cleanup_old_tasks():
+    """Dọn dẹp các task cũ đã tạo hơn 30 phút trước để giải phóng bộ nhớ."""
+    now = time.time()
+    with tasks_lock:
+        expired_ids = [tid for tid, t in TASKS.items() if now - t.get("created_at", 0) > 1800]
+        for tid in expired_ids:
+            del TASKS[tid]
+
+
+def calculate_mp3_duration(data: bytes) -> float:
+    """
+    Tính toán chính xác thời lượng (giây) của file âm thanh MP3
+    bằng cách duyệt qua các MPEG Audio Frames.
+    """
+    if not data:
+        return 0.0
+
+    bitrates_v1_l3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
+    bitrates_v2_l3 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0]
+    sample_rates_v1 = [44100, 48000, 32000, 0]
+    sample_rates_v2 = [22050, 24000, 16000, 0]
+    sample_rates_v25 = [11025, 12000, 8000, 0]
+
+    offset = 0
+    total_samples = 0
+    sample_rate = 24000
+    n = len(data)
+
+    while offset < n - 4:
+        if data[offset] == 0xFF and (data[offset + 1] & 0xE0) == 0xE0:
+            header = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]
+            version_bits = (header >> 19) & 3
+            layer_bits = (header >> 17) & 3
+            bitrate_idx = (header >> 12) & 15
+            sr_idx = (header >> 10) & 3
+            padding = (header >> 9) & 1
+
+            if layer_bits == 1:  # Layer 3 (MP3)
+                if version_bits == 3:  # MPEG-1
+                    samples_per_frame = 1152
+                    sr = sample_rates_v1[sr_idx]
+                    br = bitrates_v1_l3[bitrate_idx] * 1000
+                elif version_bits == 2:  # MPEG-2
+                    samples_per_frame = 576
+                    sr = sample_rates_v2[sr_idx]
+                    br = bitrates_v2_l3[bitrate_idx] * 1000
+                elif version_bits == 0:  # MPEG-2.5
+                    samples_per_frame = 576
+                    sr = sample_rates_v25[sr_idx]
+                    br = bitrates_v2_l3[bitrate_idx] * 1000
+                else:
+                    offset += 1
+                    continue
+
+                if sr > 0 and br > 0:
+                    sample_rate = sr
+                    frame_len = int((samples_per_frame // 8 * br) / sr + padding)
+                    if frame_len <= 0:
+                        offset += 1
+                        continue
+                    total_samples += samples_per_frame
+                    offset += frame_len
+                    continue
+        offset += 1
+
+    return round(total_samples / sample_rate, 2) if sample_rate else 0.0
+
+
 def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
     """
     Tách văn bản dài thành các đoạn nhỏ vừa vặn với giới hạn API CapCut,
@@ -70,7 +145,6 @@ def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
     if not cleaned:
         return []
 
-    # Tách theo dòng trước
     paragraphs = [p.strip() for p in cleaned.split("\n") if p.strip()]
     chunks: List[str] = []
 
@@ -79,7 +153,6 @@ def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
             chunks.append(para)
             continue
 
-        # Tách theo dấu câu . ! ? … ;
         sentences = re.split(r'(?<=[.!?…;])\s+', para)
         current = ""
 
@@ -95,7 +168,6 @@ def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
                     chunks.append(current)
                     current = ""
 
-                # Nếu bản thân 1 câu vẫn dài hơn max_chars, tách theo dấu phẩy hoặc từ ngữ
                 if len(s) > max_chars:
                     comma_parts = re.split(r'(?<=[,:\-])\s+', s)
                     sub_curr = ""
@@ -109,7 +181,6 @@ def split_text_into_chunks(text: str, max_chars: int = 250) -> List[str]:
                             if sub_curr:
                                 chunks.append(sub_curr)
                                 sub_curr = ""
-                            # Trường hợp từ đơn lẻ quá dài
                             if len(cp) > max_chars:
                                 words = cp.split()
                                 w_curr = ""
@@ -202,15 +273,69 @@ def process_single_chunk(
                 logger.error(f"Chunk #{chunk_index + 1} failed after {max_attempts} attempts: {exc}")
                 raise exc
 
-            # Randomize device ID on failure & wait backoff
             logger.warning(f"Chunk #{chunk_index + 1} retry {attempt + 1}/{max_attempts} due to: {exc}")
             with device_lock:
                 client.device.randomize()
                 local_client.device = client.device
-            import time
             time.sleep(1.0 * (attempt + 1))
 
     raise CapCutError(f"Không thể tạo âm thanh cho đoạn #{chunk_index + 1}")
+
+
+def background_tts_worker(task_id: str, chunks: List[str], voice: str, resource_id: Optional[str], rate_str: str, num_threads: int):
+    """Worker chạy nền xử lý đa luồng từng đoạn và cập nhật tiến trình trực tiếp."""
+    total_chunks = len(chunks)
+    workers = min(num_threads, total_chunks)
+    results: Dict[int, bytes] = {}
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {
+                executor.submit(
+                    process_single_chunk,
+                    idx,
+                    chunk,
+                    voice,
+                    resource_id,
+                    rate_str,
+                ): idx
+                for idx, chunk in enumerate(chunks)
+            }
+
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx, audio_data = future.result()
+                results[idx] = audio_data
+
+                with tasks_lock:
+                    if task_id in TASKS:
+                        TASKS[task_id]["completed_chunks"] = len(results)
+                        TASKS[task_id]["percent"] = int((len(results) / total_chunks) * 100)
+
+        with tasks_lock:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "merging"
+
+        ordered_parts = [results[i] for i in range(total_chunks)]
+        merged_audio = b"".join(ordered_parts)
+        duration_sec = calculate_mp3_duration(merged_audio)
+
+        with tasks_lock:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "completed"
+                TASKS[task_id]["completed_chunks"] = total_chunks
+                TASKS[task_id]["percent"] = 100
+                TASKS[task_id]["audio_bytes"] = merged_audio
+                TASKS[task_id]["audio_size"] = len(merged_audio)
+                TASKS[task_id]["duration_seconds"] = duration_sec
+
+        logger.info(f"Task {task_id} COMPLETED: {total_chunks} chunks, {len(merged_audio)} bytes, {duration_sec}s")
+
+    except Exception as e:
+        logger.error(f"Task {task_id} FAILED: {e}")
+        with tasks_lock:
+            if task_id in TASKS:
+                TASKS[task_id]["status"] = "error"
+                TASKS[task_id]["error_message"] = str(e)
 
 
 @app.get("/health")
@@ -279,13 +404,119 @@ def get_voices(
         raise HTTPException(status_code=500, detail=f"Không thể tải danh sách giọng đọc: {str(e)}")
 
 
+@app.post("/api/tts/start")
+def start_tts_task(req: TTSRequest, background_tasks: BackgroundTasks):
+    """
+    Bắt đầu task tạo TTS bất đồng bộ với tính năng theo dõi tiến trình thực tế.
+    Trả về task_id ngay lập tức để frontend cập nhật thanh tiến trình theo thời gian thực.
+    """
+    cleanup_old_tasks()
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
+
+    rate_str = f"{req.rate:.1f}" if req.rate else "1.0"
+    num_threads = min(max(req.threads or 10, 1), 50)
+
+    if req.auto_split and (len(text) > 200 or "\n" in text):
+        chunks = split_text_into_chunks(text, max_chars=250)
+    else:
+        chunks = [text]
+
+    total_chunks = len(chunks)
+    if total_chunks == 0:
+        raise HTTPException(status_code=400, detail="Không có nội dung hợp lệ để xử lý.")
+
+    task_id = uuid.uuid4().hex
+
+    with tasks_lock:
+        TASKS[task_id] = {
+            "task_id": task_id,
+            "status": "processing",
+            "total_chunks": total_chunks,
+            "completed_chunks": 0,
+            "percent": 0,
+            "voice": req.voice,
+            "text_length": len(text),
+            "created_at": time.time(),
+            "audio_bytes": None,
+            "audio_size": 0,
+            "duration_seconds": 0.0,
+            "error_message": None,
+        }
+
+    background_tasks.add_task(
+        background_tts_worker,
+        task_id,
+        chunks,
+        req.voice,
+        req.resource_id,
+        rate_str,
+        num_threads,
+    )
+
+    return {
+        "task_id": task_id,
+        "total_chunks": total_chunks,
+        "status": "processing",
+        "message": f"Bắt đầu xử lý {total_chunks} đoạn với {num_threads} luồng.",
+    }
+
+
+@app.get("/api/tts/status/{task_id}")
+def get_tts_status(task_id: str):
+    """Lấy trạng thái và tiến độ chi tiết của task tạo TTS."""
+    with tasks_lock:
+        task = TASKS.get(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task không tồn tại hoặc đã hết hạn.")
+
+        return {
+            "task_id": task_id,
+            "status": task["status"],
+            "total_chunks": task["total_chunks"],
+            "completed_chunks": task["completed_chunks"],
+            "percent": task["percent"],
+            "audio_size": task["audio_size"],
+            "duration_seconds": task["duration_seconds"],
+            "error_message": task["error_message"],
+        }
+
+
+@app.get("/api/tts/audio/{task_id}")
+def get_tts_audio(task_id: str):
+    """Tải hoặc nghe stream file MP3 hoàn chỉnh của task đã hoàn thành."""
+    with tasks_lock:
+        task = TASKS.get(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Audio không tồn tại hoặc đã hết hạn.")
+
+        if task["status"] != "completed" or not task.get("audio_bytes"):
+            raise HTTPException(status_code=400, detail="Audio chưa được xử lý xong.")
+
+        audio_data = task["audio_bytes"]
+        duration = task.get("duration_seconds", 0.0)
+        total_chunks = task.get("total_chunks", 1)
+
+    return Response(
+        content=audio_data,
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": f'attachment; filename="audio_story_{task_id[:8]}.mp3"',
+            "Content-Type": "audio/mpeg",
+            "Content-Length": str(len(audio_data)),
+            "X-Audio-Duration": str(duration),
+            "X-Total-Chunks": str(total_chunks),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
 @app.post("/api/tts")
 def generate_tts(req: TTSRequest):
     """
-    Chuyển văn bản thành giọng nói (TTS):
-    - Tự động tách đoạn văn dài thành các phần nhỏ (Smart Chunking).
-    - Xử lý đa luồng (Multi-threading) song song tăng tốc tối đa.
-    - Tự động ghép nối các phần âm thanh thành một file MP3 hoàn chỉnh.
+    Endpoint tạo TTS trực tiếp (đồng bộ).
     """
     text = req.text.strip()
     if not text:
@@ -294,25 +525,19 @@ def generate_tts(req: TTSRequest):
     rate_str = f"{req.rate:.1f}" if req.rate else "1.0"
     num_threads = min(max(req.threads or 10, 1), 50)
 
-    # 1. Tách văn bản thành các đoạn nhỏ nếu bật auto_split hoặc văn bản dài
     if req.auto_split and (len(text) > 200 or "\n" in text):
         chunks = split_text_into_chunks(text, max_chars=250)
     else:
         chunks = [text]
 
     total_chunks = len(chunks)
-    logger.info(
-        f"Processing TTS | Voice: {req.voice} | Rate: {rate_str} | "
-        f"Total chars: {len(text)} | Chunks: {total_chunks} | Threads: {num_threads}"
-    )
-
     if total_chunks == 0:
         raise HTTPException(status_code=400, detail="Không có nội dung hợp lệ để xử lý.")
 
     try:
-        # Nếu chỉ có 1 đoạn duy nhất -> xử lý trực tiếp
         if total_chunks == 1:
             _, audio_bytes = process_single_chunk(0, chunks[0], req.voice, req.resource_id, rate_str)
+            duration_sec = calculate_mp3_duration(audio_bytes)
             return Response(
                 content=audio_bytes,
                 media_type="audio/mpeg",
@@ -320,10 +545,10 @@ def generate_tts(req: TTSRequest):
                     "Content-Disposition": 'inline; filename="speech.mp3"',
                     "Content-Type": "audio/mpeg",
                     "X-Total-Chunks": "1",
+                    "X-Audio-Duration": str(duration_sec),
                 },
             )
 
-        # Xử lý đa luồng cho nhiều đoạn (Multi-threading)
         workers = min(num_threads, total_chunks)
         results: Dict[int, bytes] = {}
 
@@ -344,11 +569,9 @@ def generate_tts(req: TTSRequest):
                 idx, audio_data = future.result()
                 results[idx] = audio_data
 
-        # Ghép nối các đoạn audio theo đúng thứ tự ban đầu
-        ordered_audio_parts = [results[i] for i in range(total_chunks)]
-        merged_audio = b"".join(ordered_audio_parts)
-
-        logger.info(f"Successfully generated & merged {total_chunks} chunks ({len(merged_audio)} bytes)")
+        ordered_parts = [results[i] for i in range(total_chunks)]
+        merged_audio = b"".join(ordered_parts)
+        duration_sec = calculate_mp3_duration(merged_audio)
 
         return Response(
             content=merged_audio,
@@ -356,7 +579,9 @@ def generate_tts(req: TTSRequest):
             headers={
                 "Content-Disposition": 'inline; filename="speech.mp3"',
                 "Content-Type": "audio/mpeg",
+                "Content-Length": str(len(merged_audio)),
                 "X-Total-Chunks": str(total_chunks),
+                "X-Audio-Duration": str(duration_sec),
             },
         )
 

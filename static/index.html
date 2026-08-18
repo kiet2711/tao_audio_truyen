@@ -8,8 +8,8 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- FontAwesome for Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome 6 Free -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Main Style -->
     <link rel="stylesheet" href="/static/style.css">
@@ -26,11 +26,11 @@
         <header class="app-header">
             <div class="brand">
                 <div class="brand-logo">
-                    <i class="fa-solid fa-waveform-lines"></i>
+                    <i class="fa-solid fa-headphones"></i>
                 </div>
                 <div class="brand-info">
                     <h1>CapCut TTS Studio</h1>
-                    <p class="brand-sub">Chuyển văn bản thành giọng đọc tự nhiên &bull; Hỗ trợ văn bản dài đa luồng</p>
+                    <p class="brand-sub">Chuyển văn bản thành giọng đọc tự nhiên &bull; Hỗ trợ truyện dài đa luồng</p>
                 </div>
             </div>
 
@@ -55,7 +55,7 @@
                 <div class="card glass-card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="fa-solid fa-microphone-lines"></i>
+                            <i class="fa-solid fa-microphone"></i>
                             <h2>Cấu hình giọng đọc & Tốc độ</h2>
                         </div>
                         <span class="voice-count-badge" id="voiceCountBadge">Đang tải giọng...</span>
@@ -155,7 +155,7 @@
                         </div>
                         <div class="text-actions">
                             <button class="btn-text-action" id="btnSampleLongText" title="Điền truyện/văn bản dài mẫu">
-                                <i class="fa-solid fa-book-open"></i> Mẫu dài
+                                <i class="fa-solid fa-book-open"></i> Mẫu truyện dài
                             </button>
                             <button class="btn-text-action" id="btnSampleText" title="Điền văn bản mẫu ngắn">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i> Mẫu ngắn
@@ -168,7 +168,7 @@
 
                     <div class="card-body">
                         <div class="textarea-container">
-                            <textarea id="textInput" rows="7" placeholder="Nhập hoặc dán nội dung văn bản bạn muốn đọc vào đây... (Không giới hạn độ dài, hệ thống sẽ tự động tách câu và chạy đa luồng siêu tốc)"></textarea>
+                            <textarea id="textInput" rows="7" placeholder="Nhập hoặc dán nội dung truyện/văn bản bạn muốn tạo audio vào đây... (Hệ thống tự động tách câu và chạy đa luồng siêu tốc)"></textarea>
                         </div>
 
                         <div class="text-stats">
@@ -181,14 +181,14 @@
                                 <span class="stat-value" id="wordCount">0</span>
                             </div>
                             <div class="stat-item" id="chunkEstimateWrapper">
-                                <span class="stat-label">Số đoạn:</span>
-                                <span class="stat-value chunk-badge" id="chunkEstimate">1 đoạn</span>
+                                <span class="stat-label">Ước tính:</span>
+                                <span class="stat-value chunk-badge" id="chunkEstimate">1 đoạn (10 luồng)</span>
                             </div>
                         </div>
 
                         <!-- Action Button -->
                         <div class="action-row">
-                            <button class="btn btn-primary btn-block" id="btnGenerate">
+                            <button class="btn btn-primary btn-block btn-lg" id="btnGenerate">
                                 <i class="fa-solid fa-play"></i>
                                 <span>Tạo Giọng Nói (TTS)</span>
                             </button>
@@ -197,8 +197,47 @@
                 </div>
             </section>
 
-            <!-- Right Column: Player & History -->
+            <!-- Right Column: Progress, Player & History -->
             <section class="output-section">
+                <!-- Real-time Progress Card (Visible when generating) -->
+                <div class="card glass-card progress-card" id="progressCard" style="display: none;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-bolt progress-spin-icon"></i>
+                            <h2>Tiến trình tạo âm thanh</h2>
+                        </div>
+                        <span class="task-percent-badge" id="taskPercentBadge">0%</span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Progress Track -->
+                        <div class="task-progress-wrapper">
+                            <div class="task-progress-track">
+                                <div class="task-progress-fill" id="taskProgressBar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Information Metrics -->
+                        <div class="task-metrics-grid">
+                            <div class="task-metric-item">
+                                <span class="metric-label">Đoạn hoàn thành:</span>
+                                <span class="metric-value" id="taskDoneChunksText">0 / 0 đoạn</span>
+                            </div>
+                            <div class="task-metric-item">
+                                <span class="metric-label">Trạng thái:</span>
+                                <span class="metric-value highlight" id="taskStatusText">Đang chuẩn bị...</span>
+                            </div>
+                            <div class="task-metric-item">
+                                <span class="metric-label">Đa luồng:</span>
+                                <span class="metric-value" id="taskThreadsBadge">10 Luồng</span>
+                            </div>
+                            <div class="task-metric-item">
+                                <span class="metric-label">Thời gian chạy:</span>
+                                <span class="metric-value" id="taskElapsedText">00:00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Audio Player Card -->
                 <div class="card glass-card player-card" id="playerCard">
                     <div class="card-header">
@@ -210,7 +249,7 @@
                     </div>
 
                     <div class="card-body">
-                        <!-- Visualizer / Waveform Animation -->
+                        <!-- Visualizer Waveform Animation -->
                         <div class="visualizer-container" id="visualizer">
                             <div class="wave-bar"></div>
                             <div class="wave-bar"></div>
@@ -226,31 +265,60 @@
                             <div class="wave-bar"></div>
                         </div>
 
-                        <!-- Custom Player Controls -->
+                        <!-- Custom Player Details -->
                         <div class="player-info" id="playerInfo">
                             <div class="info-voice-name" id="currentPlayingVoice">Chọn văn bản và bấm tạo âm thanh</div>
-                            <div class="info-text-preview" id="currentPlayingPreview">...</div>
+                            <div class="info-text-preview" id="currentPlayingPreview">Chưa có file âm thanh nào được nạp.</div>
                         </div>
 
-                        <!-- Audio element -->
-                        <audio id="audioElement" preload="auto"></audio>
+                        <!-- Safe audio element container -->
+                        <div class="audio-hidden-host" style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; overflow: hidden;">
+                            <audio id="audioElement" preload="auto"></audio>
+                        </div>
 
+                        <!-- Player Controls & Timeline -->
                         <div class="audio-controls-custom">
-                            <div class="progress-bar-container" id="progressContainer">
-                                <div class="progress-fill" id="progressFill"></div>
+                            <!-- Timeline Scrubber -->
+                            <div class="progress-bar-container" id="progressContainer" title="Bấm hoặc kéo để tua">
+                                <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                                <div class="progress-scrubber-handle" id="progressHandle"></div>
                             </div>
+                            
                             <div class="time-display">
-                                <span id="currentTime">00:00</span>
-                                <span id="durationTime">00:00</span>
+                                <span class="time-current" id="currentTime">00:00</span>
+                                <span class="time-divider">/</span>
+                                <span class="time-duration" id="durationTime">00:00</span>
                             </div>
 
+                            <!-- Playback Control Buttons -->
                             <div class="player-buttons">
-                                <button class="btn-circle" id="btnPlayPause" disabled title="Phát/Dừng">
+                                <button class="btn-ctrl-secondary" id="btnRewind10" disabled title="Lùi lại 10 giây">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                    <span>-10s</span>
+                                </button>
+                                
+                                <button class="btn-circle" id="btnPlayPause" disabled title="Phát / Tạm dừng">
                                     <i class="fa-solid fa-play"></i>
                                 </button>
-                                <a class="btn btn-secondary btn-download" id="btnDownload" href="#" download="speech.mp3" style="display: none;">
+
+                                <button class="btn-ctrl-secondary" id="btnForward10" disabled title="Tua tới 10 giây">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                    <span>+10s</span>
+                                </button>
+
+                                <div class="playback-speed-wrapper">
+                                    <button class="btn-speed-toggle" id="btnSpeedToggle" title="Tốc độ phát">1.0x</button>
+                                </div>
+                            </div>
+
+                            <!-- Dedicated Download Button Area -->
+                            <div class="download-action-area" id="downloadArea" style="display: none;">
+                                <a class="btn btn-download-primary" id="btnDownloadMain" href="#" download="audio_story.mp3">
                                     <i class="fa-solid fa-download"></i>
-                                    <span>Tải file MP3</span>
+                                    <div class="download-btn-text">
+                                        <span class="dl-title">TẢI FILE AUDIO (.MP3)</span>
+                                        <span class="dl-meta" id="dlMetaInfo">Sẵn sàng tải về</span>
+                                    </div>
                                 </a>
                             </div>
                         </div>
@@ -283,7 +351,7 @@
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>CapCut Text-to-Speech Web App &bull; Hỗ trợ văn bản dài & Xử lý đa luồng &bull; Sẵn sàng deploy Render.com</p>
+            <p>CapCut Text-to-Speech Web Studio &bull; Tách đoạn thông minh & Xử lý đa luồng siêu tốc</p>
         </footer>
     </div>
 
